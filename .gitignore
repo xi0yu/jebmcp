@@ -1,0 +1,10 @@
+*.lock
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+*.class
+.venv
+jeb_mcp.egg-info
+*.DS_Store
