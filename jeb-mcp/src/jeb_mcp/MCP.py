@@ -315,86 +315,144 @@ def getOrLoadApk(filepath):
     return None
 
 @jsonrpc
-def get_manifest(filepath):
-    """Get the manifest of the given APK file in path, note filepath needs to be an absolute path"""
-    if not filepath:
+def get_manifest():
+    """Get the manifest of the currently loaded APK project in JEB"""
+    engctx = CTX.getEnginesContext()
+
+    if not engctx:
+        print('Back-end engines not initialized')
         return None
 
-    apk = getOrLoadApk(filepath)  # Fixed: use getOrLoadApk function to load the APK
-    #get base name
-    
-    if apk is None:
-        # if the input is not apk (e.g. a jar or single dex, )
-        # assume it runs in system context
+    # Get the current project instead of creating a new one
+    project = engctx.getProject()
+    if not project:
+        print('No project currently loaded in JEB')
         return None
     
-    man = apk.getManifest()
+    # Find the first APK unit in the current project
+    apk_unit = None
+    for artifact in project.getLiveArtifacts():
+        unit = artifact.getMainUnit()
+        if isinstance(unit, IApkUnit):
+            apk_unit = unit
+            break
+    
+    if apk_unit is None:
+        print('No APK unit found in the current project')
+        return None
+    
+    man = apk_unit.getManifest()
     if man is None:
+        print('No manifest found in the APK unit')
         return None
+    
     doc = man.getFormatter().getPresentation(0).getDocument()
     text = TextDocumentUtil.getText(doc)
-    #engctx.unloadProjects(True)
     return text
 
 @jsonrpc
-def get_method_decompiled_code(filepath, method_signature):
-    """Get the decompiled code of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
+def get_method_decompiled_code(method_signature):
+    """Get the decompiled code of the given method in the currently loaded APK project
     Dex units use Java-style internal addresses to identify items:
     - package: Lcom/abc/
     - type: Lcom/abc/Foo;
     - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
     - field: Lcom/abc/Foo;->flag1:Z
-    note filepath needs to be an absolute path
     """
-    if not filepath or not method_signature:
+    if not method_signature:
         return None
 
-    apk = getOrLoadApk(filepath)
-    if apk is None:
+    engctx = CTX.getEnginesContext()
+    if not engctx:
+        print('Back-end engines not initialized')
+        return None
+
+    # Get the current project
+    project = engctx.getProject()
+    if not project:
+        print('No project currently loaded in JEB')
         return None
     
-    codeUnit = apk.getDex()
+    # Find the first APK unit in the current project
+    apk_unit = None
+    for artifact in project.getLiveArtifacts():
+        unit = artifact.getMainUnit()
+        if isinstance(unit, IApkUnit):
+            apk_unit = unit
+            break
+    
+    if apk_unit is None:
+        print('No APK unit found in the current project')
+        return None
+    
+    codeUnit = apk_unit.getDex()
     method = codeUnit.getMethod(method_signature)
+    if method is None:
+        print('Method not found: %s' % method_signature)
+        return None
+    
     decomp = DecompilerHelper.getDecompiler(codeUnit)
     if not decomp:
         print('Cannot acquire decompiler for unit: %s' % decomp)
-        return
+        return None
 
     if not decomp.decompileMethod(method.getSignature()):
         print('Failed decompiling method')
-        return
+        return None
 
     text = decomp.getDecompiledMethodText(method.getSignature())
     return text
 
 
 @jsonrpc
-def get_class_decompiled_code(filepath, class_signature):
-    """Get the decompiled code of the given class in the APK file, the passed in class_signature needs to be a fully-qualified signature
+def get_class_decompiled_code(class_signature):
+    """Get the decompiled code of the given class in the currently loaded APK project
     Dex units use Java-style internal addresses to identify items:
     - package: Lcom/abc/
     - type: Lcom/abc/Foo;
     - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
     - field: Lcom/abc/Foo;->flag1:Z
-    note filepath needs to be an absolute path
     """
-    if not filepath or not class_signature:
+    if not class_signature:
         return None
 
-    apk = getOrLoadApk(filepath)
-    if apk is None:
+    engctx = CTX.getEnginesContext()
+    if not engctx:
+        print('Back-end engines not initialized')
+        return None
+
+    # Get the current project
+    project = engctx.getProject()
+    if not project:
+        print('No project currently loaded in JEB')
         return None
     
-    codeUnit = apk.getDex()
+    # Find the first APK unit in the current project
+    apk_unit = None
+    for artifact in project.getLiveArtifacts():
+        unit = artifact.getMainUnit()
+        if isinstance(unit, IApkUnit):
+            apk_unit = unit
+            break
+    
+    if apk_unit is None:
+        print('No APK unit found in the current project')
+        return None
+    
+    codeUnit = apk_unit.getDex()
     clazz = codeUnit.getClass(class_signature)
+    if clazz is None:
+        print('Class not found: %s' % class_signature)
+        return None
+    
     decomp = DecompilerHelper.getDecompiler(codeUnit)
     if not decomp:
         print('Cannot acquire decompiler for unit: %s' % decomp)
-        return
+        return None
 
     if not decomp.decompileClass(clazz.getSignature()):
-        print('Failed decompiling method')
-        return
+        print('Failed decompiling class')
+        return None
 
     text = decomp.getDecompiledClassText(clazz.getSignature())
     return text
@@ -402,23 +460,42 @@ def get_class_decompiled_code(filepath, class_signature):
 from com.pnfsoftware.jeb.core.actions import ActionXrefsData, Actions, ActionContext
 
 @jsonrpc
-def get_method_callers(filepath, method_signature):
+def get_method_callers(method_signature):
     """
-    Get the callers of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
-    note filepath needs to be an absolute path
+    Get the callers of the given method in the currently loaded APK project
     """
-    if not filepath or not method_signature:
+    if not method_signature:
         return None
 
-    apk = getOrLoadApk(filepath)
-    if apk is None:
+    engctx = CTX.getEnginesContext()
+    if not engctx:
+        print('Back-end engines not initialized')
+        return None
+
+    # Get the current project
+    project = engctx.getProject()
+    if not project:
+        print('No project currently loaded in JEB')
+        return None
+    
+    # Find the first APK unit in the current project
+    apk_unit = None
+    for artifact in project.getLiveArtifacts():
+        unit = artifact.getMainUnit()
+        if isinstance(unit, IApkUnit):
+            apk_unit = unit
+            break
+    
+    if apk_unit is None:
+        print('No APK unit found in the current project')
         return None
     
     ret = []
-    codeUnit = apk.getDex()
+    codeUnit = apk_unit.getDex()
     method = codeUnit.getMethod(method_signature)
     if method is None:
-        raise Exception("Method not found: %s" % method_signature)
+        print("Method not found: %s" % method_signature)
+        return None
     actionXrefsData = ActionXrefsData()
     actionContext = ActionContext(codeUnit, Actions.QUERY_XREFS, method.getItemId(), None)
     if codeUnit.prepareExecution(actionContext,actionXrefsData):
@@ -428,23 +505,42 @@ def get_method_callers(filepath, method_signature):
 
 from com.pnfsoftware.jeb.core.actions import Actions, ActionContext, ActionOverridesData
 @jsonrpc
-def get_method_overrides(filepath, method_signature):
+def get_method_overrides(method_signature):
     """
-    Get the overrides of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
-    note filepath needs to be an absolute path
+    Get the overrides of the given method in the currently loaded APK project
     """
-    if not filepath or not method_signature:
+    if not method_signature:
         return None
 
-    apk = getOrLoadApk(filepath)
-    if apk is None:
+    engctx = CTX.getEnginesContext()
+    if not engctx:
+        print('Back-end engines not initialized')
+        return None
+
+    # Get the current project
+    project = engctx.getProject()
+    if not project:
+        print('No project currently loaded in JEB')
+        return None
+    
+    # Find the first APK unit in the current project
+    apk_unit = None
+    for artifact in project.getLiveArtifacts():
+        unit = artifact.getMainUnit()
+        if isinstance(unit, IApkUnit):
+            apk_unit = unit
+            break
+    
+    if apk_unit is None:
+        print('No APK unit found in the current project')
         return None
     
     ret = []
-    codeUnit = apk.getDex()
+    codeUnit = apk_unit.getDex()
     method = codeUnit.getMethod(method_signature)
     if method is None:
-        raise Exception("Method not found: %s" % method_signature)
+        print("Method not found: %s" % method_signature)
+        return None
     data = ActionOverridesData()
     actionContext = ActionContext(codeUnit, Actions.QUERY_OVERRIDES, method.getItemId(), None)
     if codeUnit.prepareExecution(actionContext,data):
