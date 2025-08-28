@@ -11,13 +11,13 @@ def ping() -> str:
     return make_jsonrpc_request('ping')
 
 @mcp.tool()
-def get_manifest(filepath: str) -> str:
-    """Get the manifest of the given APK file in path, the passed in filepath needs to be a fully-qualified absolute path"""
-    return make_jsonrpc_request('get_manifest', filepath)
+def get_manifest() -> str:
+    """Get the manifest of the currently loaded APK project in JEB"""
+    return make_jsonrpc_request('get_manifest')
 
 @mcp.tool()
-def get_method_decompiled_code(filepath: str, method_signature: str) -> str:
-    """Get the decompiled code of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
+def get_method_decompiled_code(method_signature: str) -> str:
+    """Get the decompiled code of the given method in the currently loaded APK project
     Dex units use Java-style internal addresses to identify items:
         
     - package: Lcom/abc/
@@ -25,15 +25,13 @@ def get_method_decompiled_code(filepath: str, method_signature: str) -> str:
     - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
     - field: Lcom/abc/Foo;->flag1:Z
 
-    @param filepath: the path to the APK file
     @param method_signature: the fully-qualified method signature to decompile, e.g. Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
-    the passed in filepath needs to be a fully-qualified absolute path
     """
-    return make_jsonrpc_request('get_method_decompiled_code', filepath, method_signature)
+    return make_jsonrpc_request('get_method_decompiled_code', method_signature)
 
 @mcp.tool()
-def get_class_decompiled_code(filepath: str, class_signature: str) -> str:
-    """Get the decompiled code of the given class in the APK file, the passed in class_signature needs to be a fully-qualified signature
+def get_class_decompiled_code(class_signature: str) -> str:
+    """Get the decompiled code of the given class in the currently loaded APK project
     Dex units use Java-style internal addresses to identify items:
 
     - package: Lcom/abc/
@@ -41,24 +39,20 @@ def get_class_decompiled_code(filepath: str, class_signature: str) -> str:
     - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
     - field: Lcom/abc/Foo;->flag1:Z
 
-    @param: filepath: The path to the APK file
-    @param: class_signature: The fully-qualified signature of the class to decompile, e.g. Lcom/abc/Foo;
-    the passed in filepath needs to be a fully-qualified absolute path
+    @param class_signature: The fully-qualified signature of the class to decompile, e.g. Lcom/abc/Foo;
     """
-    return make_jsonrpc_request('get_class_decompiled_code', filepath, class_signature)
+    return make_jsonrpc_request('get_class_decompiled_code', class_signature)
 
 @mcp.tool()
-def get_method_callers(filepath: str, method_signature: str) -> list[(str,str)]:
+def get_method_callers(method_signature: str) -> list[(str,str)]:
     """
-    Get the callers of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
-    the passed in filepath needs to be a fully-qualified absolute path
+    Get the callers of the given method in the currently loaded APK project
     """
-    return make_jsonrpc_request('get_method_callers', filepath, method_signature)
+    return make_jsonrpc_request('get_method_callers', method_signature)
 
 @mcp.tool()
-def get_method_overrides(filepath: str, method_signature: str) -> list[(str,str)]:
+def get_method_overrides(method_signature: str) -> list[(str,str)]:
     """
-    Get the overrides of the given method in the APK file, the passed in method_signature needs to be a fully-qualified signature
-    the passed in filepath needs to be a fully-qualified absolute path
+    Get the overrides of the given method in the currently loaded APK project
     """
-    return make_jsonrpc_request('get_method_overrides', filepath, method_signature)
+    return make_jsonrpc_request('get_method_overrides', method_signature)
