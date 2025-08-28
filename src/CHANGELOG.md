@@ -1,4 +1,24 @@
-# JEB-MCP 更新日志
+# JEB-MCP Changelog
+
+## [2025-08-28] 支持 JNI 签名归一化与项目/单元获取方式更新
+
+### 变更
+- 在 `get_class_decompiled_code` 中新增 JNI 签名辅助方法与自动归一化。
+- 该函数现在支持三种输入：普通类名（如 "abjz"）、包点分格式（如 "com.example.Foo"）以及 JNI 签名（如 "Lcom/example/Foo;"）。
+- 统一改为使用 `CTX.getMainProject()` 获取当前项目。
+- 在各 RPC 方法中通过 `project.findUnit(IApkUnit)` 与 `project.findUnit(IDexUnit)` 获取 APK/Dex 单元：
+  - `get_manifest`
+  - `get_method_decompiled_code`
+  - `get_class_decompiled_code`
+  - `get_method_callers`
+  - `get_method_overrides`
+- 更新相关文档与服务端桩代码，反映新的输入兼容性。
+
+### 原因
+- 与 JEB 的运行时模型保持一致，避免依赖已废弃或不正确的引擎调用。
+- 通过支持多种类标识输入，提升开发者体验。
+- 提升代码/单元查找的稳定性与可靠性。
+
 
 ## [2024-12-19] 重大架构改进 - 使用当前JEB项目而非文件路径
 
