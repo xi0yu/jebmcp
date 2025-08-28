@@ -21,6 +21,7 @@ from com.pnfsoftware.jeb.core.units.code.asm.decompiler import INativeSourceUnit
 from java.io import File
 
 import json
+import re
 import struct
 import threading
 import traceback
@@ -282,6 +283,30 @@ import Queue as queue  # Python 2.7 uses Queue instead of queue
 import traceback
 import functools
 
+"""
+Helper utilities
+"""
+def is_valid_jni_signature(class_name):
+    """检查是否是有效的 JNI 类型签名"""
+    pattern = r'^L[^;]+;$'
+    return re.match(pattern, class_name) is not None
+
+def convert_class_signature(class_name):
+    """
+    将类名转换为 JNI 风格的签名格式
+    如果不是以 'L' 开头、';' 结尾，则进行转换
+    
+    Args:
+        class_name: 类名字符串，可以是普通格式或JNI签名格式
+        
+    Returns:
+        符合JNI签名格式的字符串
+    """
+    if is_valid_jni_signature(class_name):
+        return class_name
+    else:
+        return 'L' + class_name.replace('.', '/') + ';'
+
 @jsonrpc
 def ping():
     """Do a simple ping to check server is alive and running"""
@@ -317,26 +342,13 @@ def getOrLoadApk(filepath):
 @jsonrpc
 def get_manifest():
     """Get the manifest of the currently loaded APK project in JEB"""
-    engctx = CTX.getEnginesContext()
-
-    if not engctx:
-        print('Back-end engines not initialized')
-        return None
-
-    # Get the current project instead of creating a new one
-    project = engctx.getProject()
-    if not project:
+    project = CTX.getMainProject()
+    if project is None:
         print('No project currently loaded in JEB')
         return None
     
-    # Find the first APK unit in the current project
-    apk_unit = None
-    for artifact in project.getLiveArtifacts():
-        unit = artifact.getMainUnit()
-        if isinstance(unit, IApkUnit):
-            apk_unit = unit
-            break
-    
+    # Find APK unit via project
+    apk_unit = project.findUnit(IApkUnit)
     if apk_unit is None:
         print('No APK unit found in the current project')
         return None
@@ -362,36 +374,22 @@ def get_method_decompiled_code(method_signature):
     if not method_signature:
         return None
 
-    engctx = CTX.getEnginesContext()
-    if not engctx:
-        print('Back-end engines not initialized')
-        return None
-
-    # Get the current project
-    project = engctx.getProject()
-    if not project:
+    project = CTX.getMainProject()
+    if project is None:
         print('No project currently loaded in JEB')
         return None
     
-    # Find the first APK unit in the current project
-    apk_unit = None
-    for artifact in project.getLiveArtifacts():
-        unit = artifact.getMainUnit()
-        if isinstance(unit, IApkUnit):
-            apk_unit = unit
-            break
-    
-    if apk_unit is None:
-        print('No APK unit found in the current project')
+    dexUnit = project.findUnit(IDexUnit)
+    if dexUnit is None:
+        print('No dex unit found in the current project')
         return None
     
-    codeUnit = apk_unit.getDex()
-    method = codeUnit.getMethod(method_signature)
+    method = dexUnit.getMethod(method_signature)
     if method is None:
         print('Method not found: %s' % method_signature)
         return None
     
-    decomp = DecompilerHelper.getDecompiler(codeUnit)
+    decomp = DecompilerHelper.getDecompiler(dexUnit)
     if not decomp:
         print('Cannot acquire decompiler for unit: %s' % decomp)
         return None
@@ -406,46 +404,43 @@ def get_method_decompiled_code(method_signature):
 
 @jsonrpc
 def get_class_decompiled_code(class_signature):
-    """Get the decompiled code of the given class in the currently loaded APK project
-    Dex units use Java-style internal addresses to identify items:
-    - package: Lcom/abc/
-    - type: Lcom/abc/Foo;
-    - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
-    - field: Lcom/abc/Foo;->flag1:Z
+    """Get the decompiled code of a class in the current APK project.
+    
+    Input formats supported (auto-normalized to JNI signature):
+    - Plain class name: e.g. "abjz"
+    - Package + class with dots: e.g. "com.example.Foo"
+    - JNI-style signature: e.g. "Lcom/example/Foo;"
+    
+    Notes:
+    - The provided class identifier will be converted to a JNI signature using
+      convert_class_signature() before lookup.
+    - Example JNI components for reference:
+      - package: Lcom/abc/
+      - type: Lcom/abc/Foo;
+      - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
+      - field: Lcom/abc/Foo;->flag1:Z
     """
     if not class_signature:
         return None
 
-    engctx = CTX.getEnginesContext()
-    if not engctx:
-        print('Back-end engines not initialized')
-        return None
-
-    # Get the current project
-    project = engctx.getProject()
-    if not project:
+    project = CTX.getMainProject()
+    if project is None:
         print('No project currently loaded in JEB')
         return None
-    
-    # Find the first APK unit in the current project
-    apk_unit = None
-    for artifact in project.getLiveArtifacts():
-        unit = artifact.getMainUnit()
-        if isinstance(unit, IApkUnit):
-            apk_unit = unit
-            break
-    
-    if apk_unit is None:
-        print('No APK unit found in the current project')
+
+    dexUnit = project.findUnit(IDexUnit)
+    if dexUnit is None:
+        print('No dex unit found in the current project')
         return None
     
-    codeUnit = apk_unit.getDex()
-    clazz = codeUnit.getClass(class_signature)
+    # normalize class signature for JNI format before lookup
+    normalized_signature = convert_class_signature(class_signature)
+    clazz = dexUnit.getClass(normalized_signature)
     if clazz is None:
-        print('Class not found: %s' % class_signature)
+        print('Class not found: %s' % normalized_signature)
         return None
     
-    decomp = DecompilerHelper.getDecompiler(codeUnit)
+    decomp = DecompilerHelper.getDecompiler(dexUnit)
     if not decomp:
         print('Cannot acquire decompiler for unit: %s' % decomp)
         return None
@@ -467,38 +462,24 @@ def get_method_callers(method_signature):
     if not method_signature:
         return None
 
-    engctx = CTX.getEnginesContext()
-    if not engctx:
-        print('Back-end engines not initialized')
-        return None
-
-    # Get the current project
-    project = engctx.getProject()
-    if not project:
+    project = CTX.getMainProject()
+    if project is None:
         print('No project currently loaded in JEB')
         return None
     
-    # Find the first APK unit in the current project
-    apk_unit = None
-    for artifact in project.getLiveArtifacts():
-        unit = artifact.getMainUnit()
-        if isinstance(unit, IApkUnit):
-            apk_unit = unit
-            break
-    
-    if apk_unit is None:
-        print('No APK unit found in the current project')
+    dexUnit = project.findUnit(IDexUnit)
+    if dexUnit is None:
+        print('No dex unit found in the current project')
         return None
     
     ret = []
-    codeUnit = apk_unit.getDex()
-    method = codeUnit.getMethod(method_signature)
+    method = dexUnit.getMethod(method_signature)
     if method is None:
         print("Method not found: %s" % method_signature)
         return None
     actionXrefsData = ActionXrefsData()
-    actionContext = ActionContext(codeUnit, Actions.QUERY_XREFS, method.getItemId(), None)
-    if codeUnit.prepareExecution(actionContext,actionXrefsData):
+    actionContext = ActionContext(dexUnit, Actions.QUERY_XREFS, method.getItemId(), None)
+    if dexUnit.prepareExecution(actionContext,actionXrefsData):
         for i in range(actionXrefsData.getAddresses().size()):
             ret.append((actionXrefsData.getAddresses()[i], actionXrefsData.getDetails()[i]))
     return ret
@@ -512,38 +493,24 @@ def get_method_overrides(method_signature):
     if not method_signature:
         return None
 
-    engctx = CTX.getEnginesContext()
-    if not engctx:
-        print('Back-end engines not initialized')
-        return None
-
-    # Get the current project
-    project = engctx.getProject()
-    if not project:
+    project = CTX.getMainProject()
+    if project is None:
         print('No project currently loaded in JEB')
         return None
     
-    # Find the first APK unit in the current project
-    apk_unit = None
-    for artifact in project.getLiveArtifacts():
-        unit = artifact.getMainUnit()
-        if isinstance(unit, IApkUnit):
-            apk_unit = unit
-            break
-    
-    if apk_unit is None:
-        print('No APK unit found in the current project')
+    dexUnit = project.findUnit(IDexUnit)
+    if dexUnit is None:
+        print('No dex unit found in the current project')
         return None
     
     ret = []
-    codeUnit = apk_unit.getDex()
-    method = codeUnit.getMethod(method_signature)
+    method = dexUnit.getMethod(method_signature)
     if method is None:
         print("Method not found: %s" % method_signature)
         return None
     data = ActionOverridesData()
-    actionContext = ActionContext(codeUnit, Actions.QUERY_OVERRIDES, method.getItemId(), None)
-    if codeUnit.prepareExecution(actionContext,data):
+    actionContext = ActionContext(dexUnit, Actions.QUERY_OVERRIDES, method.getItemId(), None)
+    if dexUnit.prepareExecution(actionContext,data):
         for i in range(data.getAddresses().size()):
             ret.append((data.getAddresses()[i], data.getDetails()[i]))
     return ret
