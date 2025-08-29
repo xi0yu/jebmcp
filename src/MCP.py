@@ -1,134 +1,41 @@
 # -*- coding: utf-8 -*-
+"""
+JEB MCP Plugin - Main entry point and plugin management
+Refactored with modular architecture for better maintainability
+"""
 import sys
-
-from com.pnfsoftware.jeb.client.api import IScript
-from com.pnfsoftware.jeb.core.units import INativeCodeUnit
-from com.pnfsoftware.jeb.core.units.code.android import IDexUnit
-from com.pnfsoftware.jeb.core.util import DecompilerHelper
-
-from com.pnfsoftware.jeb.client.api import IScript, IconType, ButtonGroupType
-from com.pnfsoftware.jeb.core import JebCoreService, ICoreContext, Artifact, RuntimeProjectUtil
-
-from com.pnfsoftware.jeb.core.input import FileInput
-from com.pnfsoftware.jeb.core.units import INativeCodeUnit
-from com.pnfsoftware.jeb.core.units.code.android import IDexUnit
-from com.pnfsoftware.jeb.core.units.code import ICodeUnit
-from com.pnfsoftware.jeb.core.output.text import ITextDocument
-from com.pnfsoftware.jeb.core.util import DecompilerHelper
-from com.pnfsoftware.jeb.core.units.code.android import IApkUnit
-from com.pnfsoftware.jeb.core.output.text import TextDocumentUtil
-from com.pnfsoftware.jeb.core.units.code.asm.decompiler import INativeSourceUnit
-from java.io import File
-
 import json
-import re
-import struct
 import threading
 import traceback
 import os
-# Python 2.7 changes - use urlparse from urlparse module instead of urllib.parse
 from urlparse import urlparse
-# Python 2.7 doesn't have typing, so we'll define our own minimal substitutes
-# and ignore most type annotations
-
-# Mock typing classes/functions for type annotation compatibility
-class Any(object): pass
-class Callable(object): pass
-def get_type_hints(func):
-    """Mock for get_type_hints that works with Python 2.7 functions"""
-    hints = {}
-    
-    # Try to get annotations (modern Python way)
-    if hasattr(func, '__annotations__'):
-        hints.update(getattr(func, '__annotations__', {}))
-    
-    # For Python 2.7, inspect the function signature
-    import inspect
-    args, varargs, keywords, defaults = inspect.getargspec(func)
-    
-    # Add all positional parameters with Any type
-    for arg in args:
-        if arg not in hints:
-            hints[arg] = Any
-            
-    return hints
-class TypedDict(dict): pass
-class Optional(object): pass
-class Annotated(object): pass
-class TypeVar(object): pass
-class Generic(object): pass
-
-# Use BaseHTTPServer instead of http.server
 import BaseHTTPServer
 
+# JEB imports
+from com.pnfsoftware.jeb.client.api import IScript
+
+# Import our modular components
+from core.project_manager import ProjectManager
+from core.jeb_operations import JebOperations
+from api.jsonrpc_handler import JSONRPCHandler
+
 class JSONRPCError(Exception):
+    """Custom JSON-RPC error class"""
     def __init__(self, code, message, data=None):
         Exception.__init__(self, message)
         self.code = code
         self.message = message
         self.data = data
 
-class RPCRegistry(object):
-    def __init__(self):
-        self.methods = {}
-
-    def register(self, func):
-        self.methods[func.__name__] = func
-        return func
-
-    def dispatch(self, method, params):
-        if method not in self.methods:
-            raise JSONRPCError(-32601, "Method '{0}' not found".format(method))
-
-        func = self.methods[method]
-        hints = get_type_hints(func)
-
-        # Remove return annotation if present
-        if 'return' in hints:
-            hints.pop("return", None)
-
-        if isinstance(params, list):
-            if len(params) != len(hints):
-                raise JSONRPCError(-32602, "Invalid params: expected {0} arguments, got {1}".format(len(hints), len(params)))
-
-            # Python 2.7 doesn't support zip with items() directly
-            # Convert to simpler validation approach
-            converted_params = []
-            param_items = hints.items()
-            for i, value in enumerate(params):
-                if i < len(param_items):
-                    param_name, expected_type = param_items[i]
-                    # In Python 2.7, we'll do minimal type checking
-                    converted_params.append(value)
-                else:
-                    converted_params.append(value)
-
-            return func(*converted_params)
-        elif isinstance(params, dict):
-            # Simplify type validation for Python 2.7
-            if set(params.keys()) != set(hints.keys()):
-                raise JSONRPCError(-32602, "Invalid params: expected {0}".format(list(hints.keys())))
-
-            # Validate and convert parameters
-            converted_params = {}
-            for param_name, expected_type in hints.items():
-                value = params.get(param_name)
-                # Skip detailed type validation in Python 2.7 version
-                converted_params[param_name] = value
-
-            return func(**converted_params)
-        else:
-            raise JSONRPCError(-32600, "Invalid Request: params must be array or object")
-
-rpc_registry = RPCRegistry()
-
-def jsonrpc(func):
-    """Decorator to register a function as a JSON-RPC method"""
-    global rpc_registry
-    return rpc_registry.register(func)
-
 class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    """HTTP request handler for JSON-RPC calls"""
+    
+    def __init__(self, *args, **kwargs):
+        self.rpc_handler = kwargs.pop('rpc_handler', None)
+        BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
+    
     def send_jsonrpc_error(self, code, message, id=None):
+        """Send JSON-RPC error response"""
         response = {
             "jsonrpc": "2.0",
             "error": {
@@ -146,8 +53,7 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write(response_body)
 
     def do_POST(self):
-        global rpc_registry
-
+        """Handle POST requests for JSON-RPC calls"""
         parsed_path = urlparse(self.path)
         if parsed_path.path != "/mcp":
             self.send_jsonrpc_error(-32098, "Invalid endpoint", None)
@@ -161,7 +67,7 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         request_body = self.rfile.read(content_length)
         try:
             request = json.loads(request_body)
-        except ValueError:  # Python 2.7 uses ValueError instead of JSONDecodeError
+        except ValueError:
             self.send_jsonrpc_error(-32700, "Parse error: invalid JSON", None)
             return
 
@@ -181,9 +87,15 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             if "method" not in request:
                 raise JSONRPCError(-32600, "Method not specified")
 
-            # Dispatch the method
-            result = rpc_registry.dispatch(request["method"], request.get("params", []))
-            response["result"] = result
+            # Handle the method call through our RPC handler
+            if self.rpc_handler:
+                result = self.rpc_handler.handle_request(
+                    request["method"], 
+                    request.get("params", [])
+                )
+                response["result"] = result
+            else:
+                raise JSONRPCError(-32603, "RPC handler not initialized")
 
         except JSONRPCError as e:
             response["error"] = {
@@ -219,33 +131,38 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write(response_body)
 
     def log_message(self, format, *args):
-        # Suppress logging
+        """Suppress logging"""
         pass
 
 class MCPHTTPServer(BaseHTTPServer.HTTPServer):
+    """Custom HTTP server for MCP"""
     allow_reuse_address = False
 
-class Server(object):  # Use explicit inheritance from object for py2
+class Server(object):
+    """MCP HTTP server manager"""
+    
     HOST = "localhost"
     PORT = 16161
 
-    def __init__(self):
+    def __init__(self, rpc_handler):
         self.server = None
         self.server_thread = None
         self.running = False
+        self.rpc_handler = rpc_handler
 
     def start(self):
+        """Start the HTTP server"""
         if self.running:
             print("[MCP] Server is already running")
             return
 
-        # Python 2.7 doesn't support daemon parameter in Thread constructor
         self.server_thread = threading.Thread(target=self._run_server)
-        self.server_thread.daemon = True  # Set daemon attribute after creation
+        self.server_thread.daemon = True
         self.running = True
         self.server_thread.start()
 
     def stop(self):
+        """Stop the HTTP server"""
         if not self.running:
             return
 
@@ -259,14 +176,16 @@ class Server(object):  # Use explicit inheritance from object for py2
         print("[MCP] Server stopped")
 
     def _run_server(self):
+        """Internal server run method"""
         try:
-            # Create server in the thread to handle binding
-            self.server = MCPHTTPServer((Server.HOST, Server.PORT), JSONRPCRequestHandler)
+            # Create server with custom request handler
+            handler = lambda *args, **kwargs: JSONRPCRequestHandler(*args, rpc_handler=self.rpc_handler, **kwargs)
+            self.server = MCPHTTPServer((Server.HOST, Server.PORT), handler)
             print("[MCP] Server started at http://{0}:{1}".format(Server.HOST, Server.PORT))
             self.server.serve_forever()
         except OSError as e:
-            if e.errno == 98 or e.errno == 10048:  # Port already in use (Linux/Windows)
-                print("[MCP] Error: Port 13337 is already in use")
+            if e.errno == 98 or e.errno == 10048:  # Port already in use
+                print("[MCP] Error: Port 16161 is already in use")
             else:
                 print("[MCP] Server error: {0}".format(e))
             self.running = False
@@ -275,258 +194,36 @@ class Server(object):  # Use explicit inheritance from object for py2
         finally:
             self.running = False
 
-# A module that helps with writing thread safe ida code.
-# Based on:
-# https://web.archive.org/web/20160305190440/http://www.williballenthin.com/blog/2015/09/04/idapython-synchronization-decorator/
-import logging
-import Queue as queue  # Python 2.7 uses Queue instead of queue
-import traceback
-import functools
-
-"""
-Helper utilities
-"""
-def is_valid_jni_signature(class_name):
-    """检查是否是有效的 JNI 类型签名"""
-    pattern = r'^L[^;]+;$'
-    return re.match(pattern, class_name) is not None
-
-def convert_class_signature(class_name):
-    """
-    将类名转换为 JNI 风格的签名格式
-    如果不是以 'L' 开头、';' 结尾，则进行转换
-    
-    Args:
-        class_name: 类名字符串，可以是普通格式或JNI签名格式
-        
-    Returns:
-        符合JNI签名格式的字符串
-    """
-    if is_valid_jni_signature(class_name):
-        return class_name
-    else:
-        return 'L' + class_name.replace('.', '/') + ';'
-
-@jsonrpc
-def ping():
-    """Do a simple ping to check server is alive and running"""
-    return "pong"
-
-def getOrLoadApk(filepath):
-    engctx = CTX.getEnginesContext()
-
-    if not engctx:
-        print('Back-end engines not initialized')
-        return
-
-    if not os.path.exists(filepath):
-        raise Exception("File not found: %s" % filepath)
-    # Create a project
-    project = engctx.loadProject('MCPPluginProject')
-    base_name = os.path.basename(filepath)
-    correspondingArtifact = None
-    for artifact in project.getLiveArtifacts():
-        if artifact.getArtifact().getName() == base_name:
-            # If the artifact is already loaded, return it
-            correspondingArtifact = artifact
-            break
-    if not correspondingArtifact:
-        correspondingArtifact = project.processArtifact(Artifact(base_name, FileInput(File(filepath))))
-    
-    unit = correspondingArtifact.getMainUnit()
-    if isinstance(unit, IApkUnit):
-            # If the unit is already loaded, return it
-            return unit    
-    return None
-
-@jsonrpc
-def get_manifest():
-    """Get the manifest of the currently loaded APK project in JEB"""
-    project = CTX.getMainProject()
-    if project is None:
-        print('No project currently loaded in JEB')
-        return None
-    
-    # Find APK unit via project
-    apk_unit = project.findUnit(IApkUnit)
-    if apk_unit is None:
-        print('No APK unit found in the current project')
-        return None
-    
-    man = apk_unit.getManifest()
-    if man is None:
-        print('No manifest found in the APK unit')
-        return None
-    
-    doc = man.getFormatter().getPresentation(0).getDocument()
-    text = TextDocumentUtil.getText(doc)
-    return text
-
-@jsonrpc
-def get_method_decompiled_code(method_signature):
-    """Get the decompiled code of the given method in the currently loaded APK project
-    Dex units use Java-style internal addresses to identify items:
-    - package: Lcom/abc/
-    - type: Lcom/abc/Foo;
-    - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
-    - field: Lcom/abc/Foo;->flag1:Z
-    """
-    if not method_signature:
-        return None
-
-    project = CTX.getMainProject()
-    if project is None:
-        print('No project currently loaded in JEB')
-        return None
-    
-    dexUnit = project.findUnit(IDexUnit)
-    if dexUnit is None:
-        print('No dex unit found in the current project')
-        return None
-    
-    method = dexUnit.getMethod(method_signature)
-    if method is None:
-        print('Method not found: %s' % method_signature)
-        return None
-    
-    decomp = DecompilerHelper.getDecompiler(dexUnit)
-    if not decomp:
-        print('Cannot acquire decompiler for unit: %s' % decomp)
-        return None
-
-    if not decomp.decompileMethod(method.getSignature()):
-        print('Failed decompiling method')
-        return None
-
-    text = decomp.getDecompiledMethodText(method.getSignature())
-    return text
-
-
-@jsonrpc
-def get_class_decompiled_code(class_signature):
-    """Get the decompiled code of a class in the current APK project.
-    
-    Input formats supported (auto-normalized to JNI signature):
-    - Plain class name: e.g. "abjz"
-    - Package + class with dots: e.g. "com.example.Foo"
-    - JNI-style signature: e.g. "Lcom/example/Foo;"
-    
-    Notes:
-    - The provided class identifier will be converted to a JNI signature using
-      convert_class_signature() before lookup.
-    - Example JNI components for reference:
-      - package: Lcom/abc/
-      - type: Lcom/abc/Foo;
-      - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
-      - field: Lcom/abc/Foo;->flag1:Z
-    """
-    if not class_signature:
-        return None
-
-    project = CTX.getMainProject()
-    if project is None:
-        print('No project currently loaded in JEB')
-        return None
-
-    dexUnit = project.findUnit(IDexUnit)
-    if dexUnit is None:
-        print('No dex unit found in the current project')
-        return None
-    
-    # normalize class signature for JNI format before lookup
-    normalized_signature = convert_class_signature(class_signature)
-    clazz = dexUnit.getClass(normalized_signature)
-    if clazz is None:
-        print('Class not found: %s' % normalized_signature)
-        return None
-    
-    decomp = DecompilerHelper.getDecompiler(dexUnit)
-    if not decomp:
-        print('Cannot acquire decompiler for unit: %s' % decomp)
-        return None
-
-    if not decomp.decompileClass(clazz.getSignature()):
-        print('Failed decompiling class')
-        return None
-
-    text = decomp.getDecompiledClassText(clazz.getSignature())
-    return text
-
-from com.pnfsoftware.jeb.core.actions import ActionXrefsData, Actions, ActionContext
-
-@jsonrpc
-def get_method_callers(method_signature):
-    """
-    Get the callers of the given method in the currently loaded APK project
-    """
-    if not method_signature:
-        return None
-
-    project = CTX.getMainProject()
-    if project is None:
-        print('No project currently loaded in JEB')
-        return None
-    
-    dexUnit = project.findUnit(IDexUnit)
-    if dexUnit is None:
-        print('No dex unit found in the current project')
-        return None
-    
-    ret = []
-    method = dexUnit.getMethod(method_signature)
-    if method is None:
-        print("Method not found: %s" % method_signature)
-        return None
-    actionXrefsData = ActionXrefsData()
-    actionContext = ActionContext(dexUnit, Actions.QUERY_XREFS, method.getItemId(), None)
-    if dexUnit.prepareExecution(actionContext,actionXrefsData):
-        for i in range(actionXrefsData.getAddresses().size()):
-            ret.append((actionXrefsData.getAddresses()[i], actionXrefsData.getDetails()[i]))
-    return ret
-
-from com.pnfsoftware.jeb.core.actions import Actions, ActionContext, ActionOverridesData
-@jsonrpc
-def get_method_overrides(method_signature):
-    """
-    Get the overrides of the given method in the currently loaded APK project
-    """
-    if not method_signature:
-        return None
-
-    project = CTX.getMainProject()
-    if project is None:
-        print('No project currently loaded in JEB')
-        return None
-    
-    dexUnit = project.findUnit(IDexUnit)
-    if dexUnit is None:
-        print('No dex unit found in the current project')
-        return None
-    
-    ret = []
-    method = dexUnit.getMethod(method_signature)
-    if method is None:
-        print("Method not found: %s" % method_signature)
-        return None
-    data = ActionOverridesData()
-    actionContext = ActionContext(dexUnit, Actions.QUERY_OVERRIDES, method.getItemId(), None)
-    if dexUnit.prepareExecution(actionContext,data):
-        for i in range(data.getAddresses().size()):
-            ret.append((data.getAddresses()[i], data.getDetails()[i]))
-    return ret
-
+# Global context variable
 CTX = None
+
 class MCP(IScript):
+    """Main MCP plugin class for JEB"""
 
     def __init__(self):
-        self.server = Server()
+        self.server = None
+        self.project_manager = None
+        self.jeb_operations = None
+        self.rpc_handler = None
         print("[MCP] Plugin loaded")
 
     def run(self, ctx):
-        global CTX  # Fixed: use global keyword to modify global variable
+        """Initialize and start the MCP plugin"""
+        global CTX
         CTX = ctx
+        
+        # Initialize modular components
+        self.project_manager = ProjectManager(ctx)
+        self.jeb_operations = JebOperations(self.project_manager)
+        self.rpc_handler = JSONRPCHandler(self.jeb_operations)
+        
+        # Start HTTP server
+        self.server = Server(self.rpc_handler)
         self.server.start()
-        print("[MCP] Plugin running")
+        print("[MCP] Plugin running with modular architecture")
 
     def term(self):
-        self.server.stop()
+        """Cleanup when plugin is terminated"""
+        if self.server:
+            self.server.stop()
+        print("[MCP] Plugin terminated")
