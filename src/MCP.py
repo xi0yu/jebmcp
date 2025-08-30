@@ -214,7 +214,7 @@ class MCP(IScript):
         
         # Initialize modular components
         self.project_manager = ProjectManager(ctx)
-        self.jeb_operations = JebOperations(self.project_manager)
+        self.jeb_operations = JebOperations(self.project_manager, ctx)
         self.rpc_handler = JSONRPCHandler(self.jeb_operations)
         
         # Start HTTP server
