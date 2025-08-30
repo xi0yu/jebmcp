@@ -76,6 +76,35 @@ class JSONRPCHandler(object):
         """Handle get_method_overrides method"""
         return self.jeb_operations.get_method_overrides(params[0])
     
+    @validate_params(1, ["field_signature"])
+    def _handle_get_field_callers(self, params):
+        """Handle get_field_callers method"""
+        return self.jeb_operations.get_field_callers(params[0])
+    
+    @validate_params(1, ["class_signature"])
+    def _handle_set_class_name(self, params):
+        """Handle set_class_name method"""
+        return self.jeb_operations.set_class_name(params[0])
+    
+    @validate_params(2, ["class_signature", "method_name"])
+    def _handle_set_method_name(self, params):
+        """Handle set_method_name method"""
+        return self.jeb_operations.set_method_name(params[0], params[1])
+    
+    @validate_params(2, ["class_signature", "field_name"])
+    def _handle_set_field_name(self, params):
+        """Handle set_field_name method"""
+        return self.jeb_operations.set_field_name(params[0], params[1])
+    
+    def _handle_check_status(self, params):
+        """Handle check_status method"""
+        return self.jeb_operations.check_status()
+    
+    @validate_params(2, ["class_signature", "method_name"])
+    def _handle_get_smali_instructions(self, params):
+        """Handle get_smali_instructions method"""
+        return self.jeb_operations.get_smali_instructions(params[0], params[1])
+    
     def get_supported_methods(self):
         """Get list of supported JSON-RPC methods with parameter info"""
         methods_info = []

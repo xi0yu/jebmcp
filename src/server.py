@@ -52,8 +52,36 @@ def make_jsonrpc_request(method, *params):
         conn.close()
 
 @mcp.tool()
-def check_connection():
-    """Check if the JEB plugin is running"""
+def check_status():
+    """Get detailed status information about JEB and loaded projects
+    
+    Returns comprehensive information including:
+    - MCP to JEB connection status
+    - Number of open projects
+    - Project details (name, APK/DEX counts)
+    - APK information (package name, version, file size, MD5)
+    - DEX information (class count, method count)
+    - JEB version information
+    """
+    return make_jsonrpc_request('check_status')
+
+@mcp.tool()
+def get_smali_instructions(class_signature, method_name):
+    """Get all Smali instructions for a specific method in the given class
+    
+    Supports multiple class signature formats:
+    - Plain class name: e.g. "MainActivity"
+    - Package + class with dots: e.g. "com.example.MainActivity"
+    - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    
+    @param class_signature: Class identifier in any of the supported forms
+    @param method_name: Name of the method to get Smali instructions for
+    """
+    return make_jsonrpc_request('get_smali_instructions', class_signature, method_name)
+
+@mcp.tool()
+def ping():
+    """Do a simple ping to check server is alive and running"""
     try:
         metadata = make_jsonrpc_request("ping")
         return "Successfully connected to JEB Pro"
@@ -63,11 +91,6 @@ def check_connection():
         else:
             shortcut = "Ctrl+Alt+M"
         return "Failed to connect to JEB Pro! Did you run Edit -> Scripts -> MCP ({0}) to start the server?".format(shortcut)
-
-@mcp.tool()
-def ping():
-    """Do a simple ping to check server is alive and running"""
-    return make_jsonrpc_request('ping')
 
 @mcp.tool()
 def get_manifest():
@@ -110,10 +133,63 @@ def get_method_callers(method_signature):
 
 @mcp.tool()
 def get_method_overrides(method_signature):
-    """
-    Get the overrides of the given method in the currently loaded APK project
+    """Get the overrides of the given method in the currently loaded APK project
+    
+    @param method_signature: the fully-qualified method signature to find overrides for, e.g. Lcom/example/Foo;->bar(I[JLjava/Lang/String;)V
     """
     return make_jsonrpc_request('get_method_overrides', method_signature)
+
+@mcp.tool()
+def get_field_callers(field_signature):
+    """Get the callers/references of the given field in the currently loaded APK project
+    
+    @param field_signature: the fully-qualified field signature to find references for, e.g. Lcom/example/Foo;->flag1:Z
+    """
+    return make_jsonrpc_request('get_field_callers', field_signature)
+
+@mcp.tool()
+def set_class_name(class_signature, new_name=None):
+    """Set the name of a class in the current APK project.
+    
+    If new_name is provided, it will rename the class. If not provided, it will return current class info.
+    
+    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param new_name: Optional new name for the class
+    """
+    if new_name is None:
+        return make_jsonrpc_request('set_class_name', class_signature)
+    else:
+        return make_jsonrpc_request('set_class_name', class_signature, new_name)
+
+@mcp.tool()
+def set_method_name(class_signature, method_name, new_name=None):
+    """Set the name of a method in the specified class.
+    
+    If new_name is provided, it will rename the method. If not provided, it will return current method info.
+    
+    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param method_name: Current name of the method
+    @param new_name: Optional new name for the method
+    """
+    if new_name is None:
+        return make_jsonrpc_request('set_method_name', class_signature, method_name)
+    else:
+        return make_jsonrpc_request('set_method_name', class_signature, method_name, new_name)
+
+@mcp.tool()
+def set_field_name(class_signature, field_name, new_name=None):
+    """Set the name of a field in the specified class.
+    
+    If new_name is provided, it will rename the field. If not provided, it will return current field info.
+    
+    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param field_name: Current name of the field
+    @param new_name: Optional new name for the field
+    """
+    if new_name is None:
+        return make_jsonrpc_request('set_field_name', class_signature, field_name)
+    else:
+        return make_jsonrpc_request('set_field_name', class_signature, field_name, new_name)
 
 def main():
     argparse.ArgumentParser(description="JEB Pro MCP Server")
