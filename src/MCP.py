@@ -12,7 +12,12 @@ from urlparse import urlparse
 import BaseHTTPServer
 
 # JEB imports
-from com.pnfsoftware.jeb.client.api import IScript
+from com.pnfsoftware.jeb.client.api import IScript, IGraphicalClientContext
+
+from javax.swing import JFrame, JLabel
+from java.awt import BorderLayout, Color
+from java.lang import Runnable, Thread
+from java.awt.event import WindowAdapter
 
 # Import our modular components
 from core.project_manager import ProjectManager
@@ -197,7 +202,7 @@ class Server(object):
 # Global context variable
 CTX = None
 
-class MCP(IScript):
+class MCPServer:
     """Main MCP plugin class for JEB"""
 
     def __init__(self):
@@ -227,3 +232,48 @@ class MCP(IScript):
         if self.server:
             self.server.stop()
         print("[MCP] Plugin terminated")
+
+
+class UIThread(Runnable):
+    def __init__(self, listener):
+        self.listener = listener
+
+    def run(self):
+        frame = JFrame(u"关闭窗口将停止 JEBMCP")
+        frame.setSize(400, 100)
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+        frame.setLocationRelativeTo(None)
+
+        
+        label = JLabel(u"jeb mcp 服务运行中")
+        label.setForeground(Color.BLACK)
+        label.setHorizontalAlignment(JLabel.CENTER)  # 居中显示
+        frame.add(label, BorderLayout.CENTER)
+        
+        frame.setVisible(True)
+
+        frame.addWindowListener(self.listener)
+
+
+class MCP(IScript):
+    def __init__(self):
+        self.mcpServer = MCPServer()
+
+    def run(self, ctx):
+        if not isinstance(ctx, IGraphicalClientContext):
+            print(u"[MCP] 必须在图形客户端运行")
+            return
+        
+        
+        class WindowCloseListener(WindowAdapter):
+            def __init__(self, mcpServer):
+                self.mcp_server = mcpServer
+
+            def windowClosed(self, event):
+                self.mcp_server.term()
+                print(u"[MCP] 窗口已关闭，停止 JEBMCP 服务")
+
+        t = Thread(UIThread(WindowCloseListener(self.mcpServer)))
+        t.start()
+
+        self.mcpServer.run(ctx)

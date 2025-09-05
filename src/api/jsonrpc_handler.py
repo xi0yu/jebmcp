@@ -91,10 +91,10 @@ class JSONRPCHandler(object):
         """Handle set_method_name method"""
         return self.jeb_operations.set_method_name(params[0], params[1])
     
-    @validate_params(2, ["class_signature", "field_name"])
+    @validate_params(2, ["class_signature", "field_name", "new_name"])
     def _handle_set_field_name(self, params):
         """Handle set_field_name method"""
-        return self.jeb_operations.set_field_name(params[0], params[1])
+        return self.jeb_operations.set_field_name(params[0], params[1], params[2])
     
     def _handle_check_status(self, params):
         """Handle check_status method"""
