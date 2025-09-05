@@ -235,10 +235,10 @@ class JebOperations(object):
                 ret.append((data.getAddresses()[i], data.getDetails()[i]))
         return ret
     
-    def set_class_name(self, class_signature):
+    def set_class_name(self, class_name, new_name):
         """Set the name of a class in the current APK project"""
-        if not class_signature:
-            return {"success": False, "error": "Class signature is required"}
+        if not class_name:
+            return {"success": False, "error": "class name is required"}
         
         try:
             project = self.project_manager.get_current_project()
@@ -250,27 +250,24 @@ class JebOperations(object):
                 return {"success": False, "error": "No dex unit found in the current project"}
             
             # Normalize class signature for JNI format
-            normalized_signature = convert_class_signature(class_signature)
-            clazz = dex_unit.getClass(normalized_signature)
-            if clazz is None:
-                return {"success": False, "error": "Class not found: %s" % normalized_signature}
+            dex_class = dex_unit.getClass(convert_class_signature(class_name))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_name}
             
-            # Get current class name
-            current_name = clazz.getName()
+            if not dex_class.setName(new_name):
+                return  {"success": False, "error": "Failed to set class name: %s" % new_name}
             
             return {
                 "success": True, 
-                "class_signature": normalized_signature,
-                "current_name": current_name,
+                "new_class_name": new_name,
                 "message": "Class name retrieved successfully"
             }
-            
         except Exception as e:
-            return {"success": False, "error": "Failed to get class name: %s" % str(e)}
+            return {"success": False, "error": "Failed to set class name. exception: %s" % str(e)}
     
-    def set_method_name(self, class_signature, method_name):
+    def set_method_name(self, class_name, method_name, new_name):
         """Set the name of a method in the specified class"""
-        if not class_signature or not method_name:
+        if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
         
         try:
@@ -283,40 +280,33 @@ class JebOperations(object):
                 return {"success": False, "error": "No dex unit found in the current project"}
             
             # Normalize class signature for JNI format
-            normalized_signature = convert_class_signature(class_signature)
-            clazz = dex_unit.getClass(normalized_signature)
+            clazz = dex_unit.getClass(convert_class_signature(class_name))
             if clazz is None:
-                return {"success": False, "error": "Class not found: %s" % normalized_signature}
+                return {"success": False, "error": "Class not found: %s" % class_name}
             
             # Find method by name in the class
-            methods = clazz.getMethods()
-            found_methods = []
-            
-            for method in methods:
+            is_renamed = False
+            for method in clazz.getMethods():
                 if method.getName() == method_name:
-                    found_methods.append({
-                        "signature": method.getSignature(),
-                        "name": method.getName(),
-                        "descriptor": method.getDescriptor()
-                    })
+                    is_renamed = method.setName(new_name)
+                    break
             
-            if not found_methods:
-                return {"success": False, "error": "Method '%s' not found in class %s" % (method_name, normalized_signature)}
+            if not is_renamed:
+                return {"success": False, "error": "Rename failed for method '%s' in class %s" % (method_name, class_name)}
             
             return {
                 "success": True,
-                "class_signature": normalized_signature,
-                "method_name": method_name,
-                "methods": found_methods,
-                "message": "Method found successfully"
+                "class_name": class_name,
+                "new_method_name": new_name,
+                "message": "Method rename successfully"
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to find method: %s" % str(e)}
+            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, normalized_signature, str(e))}
     
-    def set_field_name(self, class_signature, field_name, new_name=None):
+    def set_field_name(self, class_name, field_name, new_name):
         """Set the name of a field in the specified class"""
-        if not class_signature or not field_name:
+        if not class_name or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
 
         if new_name is None:
@@ -332,39 +322,29 @@ class JebOperations(object):
                 return {"success": False, "error": "No dex unit found in the current project"}
             
             # Normalize class signature for JNI format
-            normalized_signature = convert_class_signature(class_signature)
-            clazz = dex_unit.getClass(normalized_signature)
+            clazz = dex_unit.getClass(convert_class_signature(class_name))
             if clazz is None:
-                return {"success": False, "error": "Class not found: %s" % normalized_signature}
+                return {"success": False, "error": "Class not found: %s" % class_name}
             
             # Find field by name in the class
-            fields = clazz.getFields()
-            found_fields = []
-            
-            for field in fields:
+            is_renamed = False
+            for field in clazz.getFields():
                 if field.getName() == field_name:
-                    if new_name is not None and field.setName(new_name):
-                        found_fields.append({
-                            "signature": field.getSignature(),
-                            "name": field.getName(),
-                            "new_name": new_name,
-                            "descriptor": field.getDescriptor(),
-                            "type": field.getType().toString()
-                        })
+                    is_renamed = field.setName(new_name)
+                    break
             
-            if not found_fields:
-                return {"success": False, "error": "Field '%s' not found in class %s" % (field_name, normalized_signature)}
+            if not is_renamed:
+                return {"success": False, "error": "Rename failed for field '%s' in class %s" % (field_name, class_name)}
             
             return {
                 "success": True,
-                "class_signature": normalized_signature,
-                "field_name": field_name,
-                "fields": found_fields,
+                "class_name": class_name,
+                "new_field_name": new_name,
                 "message": "Field found successfully"
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to find field: %s" % str(e)}
+            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, normalized_signature, str(e))}
     
     def get_smali_instructions(self, class_signature, method_name):
         """Get all Smali instructions for a specific method in the given class"""

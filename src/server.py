@@ -148,48 +148,45 @@ def get_field_callers(field_signature):
     return make_jsonrpc_request('get_field_callers', field_signature)
 
 @mcp.tool()
-def set_class_name(class_signature, new_name=None):
+def set_class_name(class_name, new_name):
     """Set the name of a class in the current APK project.
     
     If new_name is provided, it will rename the class. If not provided, it will return current class info.
     
-    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param class_name: Class signature. Supports both:
+        - JNI format, e.g. Lcom/example/MyClass;
+        - Java format, e.g. com.example.MyClass
     @param new_name: Optional new name for the class
     """
-    if new_name is None:
-        return make_jsonrpc_request('set_class_name', class_signature)
-    else:
-        return make_jsonrpc_request('set_class_name', class_signature, new_name)
+    return make_jsonrpc_request('set_class_name', class_name, new_name)
 
 @mcp.tool()
-def set_method_name(class_signature, method_name, new_name=None):
+def set_method_name(class_name, method_name, new_name):
     """Set the name of a method in the specified class.
     
     If new_name is provided, it will rename the method. If not provided, it will return current method info.
     
-    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param class_name: Class signature. Supports both:
+        - JNI format, e.g. Lcom/example/MyClass;
+        - Java format, e.g. com.example.MyClass
     @param method_name: Current name of the method
     @param new_name: Optional new name for the method
     """
-    if new_name is None:
-        return make_jsonrpc_request('set_method_name', class_signature, method_name)
-    else:
-        return make_jsonrpc_request('set_method_name', class_signature, method_name, new_name)
+    return make_jsonrpc_request('set_method_name', class_name, method_name, new_name)
 
 @mcp.tool()
-def set_field_name(class_signature, field_name, new_name=None):
+def set_field_name(class_signature, field_name, new_name):
     """Set the name of a field in the specified class.
     
     If new_name is provided, it will rename the field. If not provided, it will return current field info.
     
-    @param class_signature: Class signature in JNI format, e.g. Lcom/example/MyClass;
+    @param class_name: Class signature. Supports both:
+        - JNI format, e.g. Lcom/example/MyClass;
+        - Java format, e.g. com.example.MyClass
     @param field_name: Current name of the field
     @param new_name: Optional new name for the field
     """
-    if new_name is None:
-        return make_jsonrpc_request('set_field_name', class_signature, field_name)
-    else:
-        return make_jsonrpc_request('set_field_name', class_signature, field_name, new_name)
+    return make_jsonrpc_request('set_field_name', class_signature, field_name, new_name)
 
 def main():
     argparse.ArgumentParser(description="JEB Pro MCP Server")
