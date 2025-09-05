@@ -314,10 +314,13 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to find method: %s" % str(e)}
     
-    def set_field_name(self, class_signature, field_name):
+    def set_field_name(self, class_signature, field_name, new_name=None):
         """Set the name of a field in the specified class"""
         if not class_signature or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
+
+        if new_name is None:
+            return {"success": False, "error": "New name is required"}
         
         try:
             project = self.project_manager.get_current_project()
@@ -340,12 +343,14 @@ class JebOperations(object):
             
             for field in fields:
                 if field.getName() == field_name:
-                    found_fields.append({
-                        "signature": field.getSignature(),
-                        "name": field.getName(),
-                        "descriptor": field.getDescriptor(),
-                        "type": field.getType().toString()
-                    })
+                    if new_name is not None and field.setName(new_name):
+                        found_fields.append({
+                            "signature": field.getSignature(),
+                            "name": field.getName(),
+                            "new_name": new_name,
+                            "descriptor": field.getDescriptor(),
+                            "type": field.getType().toString()
+                        })
             
             if not found_fields:
                 return {"success": False, "error": "Field '%s' not found in class %s" % (field_name, normalized_signature)}
@@ -513,134 +518,56 @@ class JebOperations(object):
             }
     
     def _get_project_details(self, project):
-        """Get detailed information about a specific project"""
         try:
-            project_name = project.getName() if hasattr(project, 'getName') else "Unknown"
-            
-            # Count APK and DEX units
-            apk_units = []
-            dex_units = []
-            
-            # Get all units in the project
-            units = project.getUnits()
-            if units:
-                for unit in units:
-                    if isinstance(unit, IApkUnit):
-                        apk_info = self._get_apk_unit_info(unit)
-                        if apk_info:
-                            apk_units.append(apk_info)
-                    elif isinstance(unit, IDexUnit):
-                        dex_info = self._get_dex_unit_info(unit)
-                        if dex_info:
-                            dex_units.append(dex_info)
-            
+            dex_class_count = 0
+            dex_method_count = 0
+            dex_field_count = 0
+
+            for dex_unit in project.findUnits(IDexUnit):
+                dex_class_count += len(dex_unit.getClasses())
+                dex_method_count += len(dex_unit.getMethods())
+                dex_field_count += len(dex_unit.getFields())
+
+            package_name = "Unknown"
+            application_entry_class_name = "Unknown"
+            manifest_component_count = [
+                ("activities", 0),
+                ("services", 0),
+                ("receivers", 0),
+                ("providers", 0)
+            ]
+
+            for apk_unit in project.findUnits(IApkUnit):
+                if not apk_unit.hasApplication():
+                    continue
+                package_name = apk_unit.getPackageName() or "Unknown"
+                application_entry_class_name = apk_unit.getApplicationClassName() or "Unknown"
+                manifest_component_count = [
+                    ("activities", len(apk_unit.getActivities())),
+                    ("services", len(apk_unit.getServices())),
+                    ("receivers", len(apk_unit.getReceivers())),
+                    ("providers", len(apk_unit.getProviders()))
+                ]
+                break
+
             return {
-                "name": project_name,
-                "apk_count": len(apk_units),
-                "dex_count": len(dex_units),
-                "apk_units": apk_units,
-                "dex_units": dex_units
+                "package_name": package_name,
+                "application_entry_class_name": application_entry_class_name,
+                "dex_class_count": dex_class_count,
+                "dex_method_count": dex_method_count,
+                "dex_field_count": dex_field_count,
+                "manifest_component_count": manifest_component_count
             }
-            
+
         except Exception as e:
             print("Error getting project details: %s" % str(e))
-            return None
-    
-    def _get_apk_unit_info(self, apk_unit):
-        """Get detailed information about an APK unit"""
-        try:
-            # Get APK file path
-            file_path = apk_unit.getFile().getPath() if apk_unit.getFile() else "Unknown"
-            
-            # Get package name from manifest
-            package_name = "Unknown"
-            try:
-                manifest = apk_unit.getManifest()
-                if manifest:
-                    package_name = manifest.getPackage()
-            except:
-                pass
-            
-            # Get version info
-            version_name = "Unknown"
-            version_code = "Unknown"
-            try:
-                manifest = apk_unit.getManifest()
-                if manifest:
-                    version_name = manifest.getVersionName() or "Unknown"
-                    version_code = str(manifest.getVersionCode()) if manifest.getVersionCode() else "Unknown"
-            except:
-                pass
-            
-            # Get file size
-            file_size = "Unknown"
-            try:
-                if apk_unit.getFile():
-                    file_size = str(apk_unit.getFile().length())
-            except:
-                pass
-            
-            # Get MD5 hash
-            md5_hash = "Unknown"
-            try:
-                if apk_unit.getFile():
-                    file_obj = apk_unit.getFile()
-                    if file_obj:
-                        # Calculate MD5 hash
-                        md5 = hashlib.md5()
-                        # Read file in chunks to handle large files
-                        chunk_size = 8192
-                        file_obj.seek(0)
-                        while True:
-                            chunk = file_obj.read(chunk_size)
-                            if not chunk:
-                                break
-                            md5.update(chunk)
-                        md5_hash = md5.hexdigest()
-            except Exception as e:
-                print("Error calculating MD5: %s" % str(e))
-                md5_hash = "Error"
-            
             return {
-                "file_path": file_path,
-                "package_name": package_name,
-                "version_name": version_name,
-                "version_code": version_code,
-                "file_size": file_size,
-                "md5": md5_hash
+                "package_name": "Error",
+                "application_entry_class_name": "Error",
+                "dex_class_count": 0,
+                "dex_method_count": 0,
+                "dex_field_count": 0,
+                "manifest_component_count": []
             }
-            
-        except Exception as e:
-            print("Error getting APK unit info: %s" % str(e))
-            return None
-    
-    def _get_dex_unit_info(self, dex_unit):
-        """Get detailed information about a DEX unit"""
-        try:
-            # Get DEX file path
-            file_path = dex_unit.getFile().getPath() if dex_unit.getFile() else "Unknown"
-            
-            # Count classes and methods
-            class_count = 0
-            method_count = 0
-            try:
-                classes = dex_unit.getClasses()
-                if classes:
-                    class_count = len(classes)
-                    for clazz in classes:
-                        methods = clazz.getMethods()
-                        if methods:
-                            method_count += len(methods)
-            except:
-                pass
-            
-            return {
-                "file_path": file_path,
-                "class_count": class_count,
-                "method_count": method_count
-            }
-            
-        except Exception as e:
-            print("Error getting DEX unit info: %s" % str(e))
-            return None
+
     
