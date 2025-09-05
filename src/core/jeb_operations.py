@@ -541,7 +541,7 @@ class JebOperations(object):
                 if not apk_unit.hasApplication():
                     continue
                 package_name = apk_unit.getPackageName() or "Unknown"
-                application_entry_class_name = apk_unit.getApplicationClassName() or "Unknown"
+                application_entry_class_name = apk_unit.getApplicationName() or "Unknown"
                 manifest_component_count = [
                     ("activities", len(apk_unit.getActivities())),
                     ("services", len(apk_unit.getServices())),
