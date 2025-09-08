@@ -30,20 +30,17 @@ JEBMCP 主要特性：
 
 不同客户端对交互方式的支持情况：  
 
-- **Claude**  
+- **Claude / Claude code**  
   - 支持 SSE  
   - 支持 HTTP  
   - 支持 stdio  
 
-- **Trae**  
-  - 支持 stdio  
-
-- **Cursor**  
+- **Trae / Cursor / Vscode**  
   - 支持 stdio  
 
 提示：  
-- 使用 **Cursor / Trae** 时，请确保 MCP 服务通过 `stdio` 模式运行。  
-- 使用 **Claude** 时，可以选择 `sse` 或 `http`，获得更灵活的交互方式。  
+- 使用 **Cursor / Trae / Vscode** 时，请确保 MCP 服务通过 `stdio` 模式运行。  
+- 使用 **Claude / Claude code** 时，可以选择 `sse` 或 `http`，获得更灵活的交互方式。  
 
 ---
 
