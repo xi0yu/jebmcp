@@ -76,7 +76,7 @@ def check_status():
     return _jeb_call('check_status')
 
 @mcp.tool()
-def get_smali_instructions(class_signature, method_name):
+def get_method_smali(class_signature, method_name):
     """Get all Smali instructions for a specific method in the given class
 
     Supports multiple class signature formats:
@@ -87,7 +87,7 @@ def get_smali_instructions(class_signature, method_name):
     @param class_signature: Class identifier in any of the supported forms
     @param method_name: Name of the method to get Smali instructions for
     """
-    return _jeb_call('get_smali_instructions', class_signature, method_name)
+    return _jeb_call('get_method_smali', class_signature, method_name)
 
 @mcp.tool()
 def ping():
@@ -147,12 +147,14 @@ def get_method_overrides(method_signature):
     return _jeb_call('get_method_overrides', method_signature)
 
 @mcp.tool()
-def get_field_callers(field_signature):
-    """Get the callers/references of the given field in the currently loaded APK project
+def get_field_callers(class_name: str, field_name: str):
+    """Get the callers/references of the given field in the currently loaded APK project.
 
-    @param field_signature: the fully-qualified field signature to find references for, e.g. Lcom/example/Foo;->flag1:Z
+    @param class_name: class name in either Dalvik JNI signature (e.g. Lcom/example/Foo;) 
+                       or normal Java style (e.g. com.example.Foo)
+    @param field_name: the field name (e.g. flag1)
     """
-    return _jeb_call('get_field_callers', field_signature)
+    return _jeb_call('get_field_callers', class_name, field_name)
 
 @mcp.tool()
 def set_class_name(class_name, new_name=None):
@@ -206,7 +208,7 @@ async def health(_request):
 # -----------------------------
 def main():
     parser = argparse.ArgumentParser(description="JEB Pro MCP Server (SSE/HTTP)")
-    parser.add_argument("--transport", choices=["sse", "http", "stdio"], default=os.environ.get("TRANSPORT", "sse"),
+    parser.add_argument("--transport", choices=["sse", "http", "stdio"], default=os.environ.get("TRANSPORT", "stdio"),
                         help="MCP 传输协议：sse(默认)、http、stdio")
     parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"),
                         help="对外绑定地址（sse/http 有效）")

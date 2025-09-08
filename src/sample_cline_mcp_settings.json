@@ -19,7 +19,7 @@
         "get_method_decompiled_code",
         "ping",
         "get_method_overrides",
-        "get_smali_instructions",
+        "get_method_smali",
         "check_status"
       ]
     }

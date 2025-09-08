@@ -79,9 +79,9 @@ METHOD_REGISTRY = {
     "get_field_callers": MethodDefinition(
         name="get_field_callers",
         handler_method="_handle_get_field_callers",
-        required_params=1,
-        param_names=["field_signature"],
-        param_types=["string"],
+        required_params=2,
+        param_names=["class_name", "field_name"],
+        param_types=["string", "string"],
         description="Find all references/callers of a specific field",
         return_type="array"
     ),
@@ -124,9 +124,9 @@ METHOD_REGISTRY = {
         return_type="object"
     ),
     
-    "get_smali_instructions": MethodDefinition(
-        name="get_smali_instructions",
-        handler_method="_handle_get_smali_instructions",
+    "get_method_smali": MethodDefinition(
+        name="get_method_smali",
+        handler_method="_handle_get_method_smali",
         required_params=2,
         param_names=["class_signature", "method_name"],
         param_types=["string", "string"],

@@ -156,56 +156,51 @@ class JebOperations(object):
                 ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
         return ret
     
-    def get_field_callers(self, field_signature):
+    def get_field_callers(self, class_name, field_name):
         """Get the callers/references of the given field in the currently loaded APK project"""
-        if not field_signature:
-            return None
+        if not class_name or not field_name:
+            return {"success": False, "error": "Both class signature and method name are required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
-        
-        ret = []
-        # Parse field signature to get class and field name
-        # Field signature format: Lcom/example/Class;->fieldName:Type
-        if '->' not in field_signature:
-            print("Invalid field signature format. Expected: Lcom/example/Class;->fieldName:Type")
-            return None
-        
-        class_part, field_part = field_signature.split('->', 1)
-        if not class_part.endswith(';'):
-            class_part += ';'
+            return {"success": False, "error": "No dex unit found in the current project"}
         
         # Get the class first
-        clazz = dex_unit.getClass(class_part)
-        if clazz is None:
-            print("Class not found: %s" % class_part)
-            return None
+        dex_class = dex_unit.getClass(convert_class_signature(class_name))
+        if dex_class is None:
+            return {"success": False, "error": "Class not found: %s" % class_name}
         
         # Find the field in the class
         field = None
-        for f in clazz.getFields():
-            if f.getSignature() == field_signature:
+        for f in dex_class.getFields():
+            if f.getName() == field_name:
                 field = f
                 break
         
         if field is None:
-            print("Field not found: %s" % field_signature)
-            return None
-        
+            return {"success": False, "error": "Field not found: %s" % field_name}
+
         # Use the same approach as method callers - query cross-references
         action_xrefs_data = ActionXrefsData()
         action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, field.getItemId(), None)
+        field_xrefs = []
         if dex_unit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
-                ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
-        return ret
+                field_xrefs.append({
+                    "address": str(action_xrefs_data.getAddresses()[i]),
+                    "description": str(action_xrefs_data.getDetails()[i])
+                })
+        
+        return {
+            "success": True,
+            "class_name": class_name,
+            "field_name": field_name,
+            "field_xrefs": field_xrefs
+        }
     
     def get_method_overrides(self, method_signature):
         """Get the overrides of the given method in the currently loaded APK project"""
@@ -302,7 +297,7 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, normalized_signature, str(e))}
+            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, class_name, str(e))}
     
     def set_field_name(self, class_name, field_name, new_name):
         """Set the name of a field in the specified class"""
@@ -344,9 +339,9 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, normalized_signature, str(e))}
+            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, class_name, str(e))}
     
-    def get_smali_instructions(self, class_signature, method_name):
+    def get_method_smali(self, class_signature, method_name):
         """Get all Smali instructions for a specific method in the given class"""
         if not class_signature or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -378,7 +373,6 @@ class JebOperations(object):
                     found_methods.append({
                         "signature": method.getSignature(),
                         "name": method.getName(),
-                        "descriptor": method.getDescriptor(),
                         "smali_instructions": smali_instructions
                     })
             
@@ -402,7 +396,7 @@ class JebOperations(object):
             instructions = []
             
             # Get all instructions
-            instruction_count = method.getInstructions().getInstructionCount()
+            instruction_count = method.getInstructions().size()
             for i in range(instruction_count):
                 instruction = method.getInstructions().getInstruction(i)
                 if instruction is not None:
