@@ -4,9 +4,9 @@ Welcome to the **JEBMCP** repository! This project combines the power of JEB and
 
 [![Stars](https://img.shields.io/github/stars/xi0yu/jebmcp?style=social)](https://github.com/xi0yu/jebmcp/stargazers)
 [![Forks](https://img.shields.io/github/forks/xi0yu/jebmcp?style=social)](https://github.com/xi0yu/jebmcp/network/members)
+[![License](https://img.shields.io/github/license/xi0yu/jebmcp)](https://github.com/xi0yu/jebmcp/blob/main/LICENSE)
 ## Star History
 [![Star History Chart](https://api.star-history.com/svg?repos=xi0yu/jebmcp&type=Date)](https://www.star-history.com/#xi0yu/jebmcp&Date)
-[![License](https://img.shields.io/github/license/xi0yu/jebmcp)](https://github.com/xi0yu/jebmcp/blob/master/LICENSE)
 
 
 ## 🌟 Table of Contents
