@@ -1,7 +1,13 @@
-```markdown
 # 🚀 JEBMCP: A Gateway to JEB and MCP Integration
 
 Welcome to the **JEBMCP** repository! This project combines the power of JEB and MCP, facilitating reverse engineering tasks. It offers a suite of Python scripts to streamline your workflow, making it easier to analyze and manipulate code.
+
+[![Stars](https://img.shields.io/github/stars/xi0yu/jebmcp?style=social)](https://github.com/xi0yu/jebmcp/stargazers)
+[![Forks](https://img.shields.io/github/forks/xi0yu/jebmcp?style=social)](https://github.com/xi0yu/jebmcp/network/members)
+## Star History
+[![Star History Chart](https://api.star-history.com/svg?repos=xi0yu/jebmcp&type=Date)](https://www.star-history.com/#xi0yu/jebmcp&Date)
+[![License](https://img.shields.io/github/license/xi0yu/jebmcp)](https://github.com/xi0yu/jebmcp/blob/master/LICENSE)
+
 
 ## 🌟 Table of Contents
 
@@ -16,11 +22,8 @@ Welcome to the **JEBMCP** repository! This project combines the power of JEB and
 
 ## 🧐 Introduction
 
-**JEBMCP** stands at the intersection of **JEB** and **MCP**. JEB is a powerful tool for decompiling and analyzing various applications, while MCP (Minecraft Coder Pack) allows you to manipulate Minecraft's source code. This project brings these two tools together, enabling users to harness their combined capabilities for advanced reverse engineering tasks.
-
-Whether you're an experienced developer or just starting with reverse engineering, JEBMCP can provide the tools you need to enhance your projects.
-
-![JEB and MCP Integration](https://example.com/path/to/image.jpg) <!-- Replace with actual image URL -->
+**JEBMCP** 是一个将 JEB 反编译能力与 MCP（Minecraft Coder Pack）集成的工具，支持项目分析、方法/类重命名、获取方法调用关系等操作。  
+本项目通过 JSON-RPC 或 SSE 与 JEB 交互，提供 Python 端工具调用接口。
 
 ## ⚙️ Installation
 
@@ -28,7 +31,7 @@ To get started with JEBMCP, follow these steps:
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/pcjaat3844/jebmcp.git
+   git clone https://github.com/xi0yu/jebmcp.git
    ```
    
 2. **Navigate to the Project Directory**
@@ -42,23 +45,18 @@ To get started with JEBMCP, follow these steps:
    pip install -r requirements.txt
    ```
 
-## 🛠️ Usage
+## 🛠️ 项目结构与用途说明
 
-After installation, you can start using the scripts provided in this repository. 
+### server.py
+- **用途**：专为支持 **Claude Code / Claude / Cursor** 等集成 MCP 的客户端工具准备。  
+- **注意**：**不是命令行工具**，用户不需要手动运行 `python server.py`。  
+- 它会在集成工具内部被调用，用于启动 MCP 服务和桥接 JEB 客户端接口。
 
-### Basic Commands
+### MCP.py
+- **用途**：通过 **JEB 客户端** 运行脚本来调用 MCP 工具功能。  
+- **注意**：**不支持直接命令行执行**。  
+- 用户使用 JEB 内置的脚本运行功能，通过 `MCP.py` 来操作项目，例如获取方法调用关系、反编译类、重命名等。
 
-- **Run JEB Script**
-  ```bash
-  python jeb_script.py
-  ```
-
-- **Run MCP Script**
-  ```bash
-  python mcp_script.py
-  ```
-
-Refer to individual script documentation for more advanced options.
 
 ## 🌈 Features
 
@@ -83,26 +81,11 @@ Please ensure that your code follows our guidelines for coding standards and tes
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## 📞 Contact
-
-For questions or suggestions, feel free to reach out:
-
-- GitHub: [pcjaat3844](https://github.com/pcjaat3844)
-- Email: contact@example.com
-
-## 🔗 Releases
-
-To get the latest updates and downloadable files, visit our [Releases](https://github.com/pcjaat3844/jebmcp/releases) section. Download and execute the latest version for the best experience.
-
-[![Latest Release](https://img.shields.io/badge/Latest%20Release-v1.0.0-blue.svg)](https://github.com/pcjaat3844/jebmcp/releases)
-
 ## 🌍 Explore More
 
 For a deeper dive into JEB and MCP, check out the following resources:
 
-- [JEB Official Documentation](https://www.example.com/jeb)
-- [MCP Documentation](https://www.example.com/mcp)
-- [Reverse Engineering Guide](https://www.example.com/reverse-engineering-guide)
+- [JEB Official Documentation](https://www.pnfsoftware.com/jeb/apidoc)
+- [MCP Documentation](https://mcp-docs.cn/introduction)
 
 Thank you for checking out JEBMCP! We hope it helps you in your reverse engineering endeavors.
-```
