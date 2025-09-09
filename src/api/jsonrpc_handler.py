@@ -3,145 +3,74 @@
 JSON-RPC handler module - processes RPC requests and delegates to business logic
 """
 import traceback
-from functools import wraps
-from .method_registry import get_method_definition, get_all_methods, validate_method_exists
-
-def validate_params(param_count, param_names=None):
-    """Decorator to validate method parameters"""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(self, params):
-            if len(params) < param_count:
-                raise ValueError("{0} requires at least {1} parameter(s)".format(func.__name__, param_count))
-            if param_names and len(params) > len(param_names):
-                raise ValueError("{0} accepts at most {1} parameter(s)".format(func.__name__, len(param_names)))
-            return func(self, params)
-        return wrapper
-    return decorator
+import inspect
 
 class JSONRPCHandler(object):
     """Handles JSON-RPC requests and delegates to business logic"""
     
     def __init__(self, jeb_operations):
         self.jeb_operations = jeb_operations
+        
+        # 直接映射到jeb_operations的方法，无需包装函数
+        self.method_handlers = {
+            "ping": lambda params: "pong",  # ping方法特殊处理
+            "get_app_manifest": jeb_operations.get_app_manifest,
+            "get_method_decompiled_code": jeb_operations.get_method_decompiled_code,
+            "get_class_decompiled_code": jeb_operations.get_class_decompiled_code,
+            "get_method_callers": jeb_operations.get_method_callers,
+            "get_method_overrides": jeb_operations.get_method_overrides,
+            "get_field_callers": jeb_operations.get_field_callers,
+            "rename_class_name": jeb_operations.rename_class_name,
+            "rename_method_name": jeb_operations.rename_method_name,
+            "rename_field_name": jeb_operations.rename_field_name,
+            "get_current_project_info": jeb_operations.get_current_project_info,
+            "get_method_smali": jeb_operations.get_method_smali,
+        }
+    
+
+    def _get_jeb_method_signature(self, method_name):
+        if not hasattr(self.jeb_operations, method_name):
+            return None
+        
+        jeb_method = getattr(self.jeb_operations, method_name)
+        args, varargs, varkw, defaults = inspect.getargspec(jeb_method)
+        
+        if args and args[0] == 'self':
+            args = args[1:]
+        
+        required_count = len(args) - (len(defaults) if defaults else 0)
+        
+        return {
+            'required_params': required_count,
+            'total_params': len(args),
+            'param_names': args
+        }
     
     def handle_request(self, method, params):
-        """Handle JSON-RPC method calls using method registry"""
+        """Handle JSON-RPC method calls using direct method mapping"""
         try:
-            # 获取方法定义
-            method_def = get_method_definition(method)
-            if not method_def:
+            # 检查方法是否存在
+            if method not in self.method_handlers:
                 raise ValueError("Unknown method: {0}".format(method))
             
-            # 参数验证
-            if len(params) < method_def.required_params:
-                raise ValueError("{0} requires at least {1} parameter(s)".format(method, method_def.required_params))
-            if method_def.param_names and len(params) > len(method_def.param_names):
-                raise ValueError("{0} accepts at most {1} parameter(s)".format(method, len(method_def.param_names)))
+            # 自动参数验证（基于JEB操作方法的签名）
+            sig_info = self._get_jeb_method_signature(method)
+            if sig_info:
+                if len(params) < sig_info['required_params']:
+                    raise ValueError("{0} requires at least {1} parameter(s), got {2}".format(
+                        method, sig_info['required_params'], len(params)))
+                if len(params) > sig_info['total_params']:
+                    raise ValueError("{0} accepts at most {1} parameter(s), got {2}".format(
+                        method, sig_info['total_params'], len(params)))
             
-            # 动态调用对应的处理函数
-            handler_method = getattr(self, method_def.handler_method)
-            return handler_method(params)
+            # 直接调用方法，使用*params展开参数列表
+            handler = self.method_handlers[method]
+            if method == "ping":
+                return handler(params)  # ping方法特殊处理，接收params参数
+            else:
+                return handler(*params)  # 其他方法直接展开参数
             
         except Exception as e:
             print("Error handling {0}: {1}".format(method, str(e)))
             traceback.print_exc()
             raise
-    
-    def _handle_ping(self, params):
-        """Handle ping method"""
-        return "pong"
-    
-    def _handle_get_manifest(self, params):
-        """Handle get_manifest method"""
-        return self.jeb_operations.get_manifest()
-    
-    @validate_params(1, ["method_signature"])
-    def _handle_get_method_decompiled_code(self, params):
-        """Handle get_method_decompiled_code method"""
-        return self.jeb_operations.get_method_decompiled_code(params[0])
-    
-    @validate_params(1, ["class_signature"])
-    def _handle_get_class_decompiled_code(self, params):
-        """Handle get_class_decompiled_code method"""
-        return self.jeb_operations.get_class_decompiled_code(params[0])
-    
-    @validate_params(1, ["method_signature"])
-    def _handle_get_method_callers(self, params):
-        """Handle get_method_callers method"""
-        return self.jeb_operations.get_method_callers(params[0])
-    
-    @validate_params(1, ["method_signature"])
-    def _handle_get_method_overrides(self, params):
-        """Handle get_method_overrides method"""
-        return self.jeb_operations.get_method_overrides(params[0])
-    
-    @validate_params(2, ["class_name", "field_name"])
-    def _handle_get_field_callers(self, params):
-        """Handle get_field_callers method"""
-        return self.jeb_operations.get_field_callers(params[0], params[1])
-    
-    @validate_params(2, ["class_name", "new_name"])
-    def _handle_set_class_name(self, params):
-        """Handle set_class_name method"""
-        return self.jeb_operations.set_class_name(params[0], params[1])
-    
-    @validate_params(3, ["class_name", "method_name", "new_name"])
-    def _handle_set_method_name(self, params):
-        """Handle set_method_name method"""
-        return self.jeb_operations.set_method_name(params[0], params[1], params[2])
-    
-    @validate_params(3, ["class_signature", "field_name", "new_name"])
-    def _handle_set_field_name(self, params):
-        """Handle set_field_name method"""
-        return self.jeb_operations.set_field_name(params[0], params[1], params[2])
-    
-    def _handle_check_status(self, params):
-        """Handle check_status method"""
-        return self.jeb_operations.check_status()
-    
-    @validate_params(2, ["class_signature", "method_name"])
-    def _handle_get_method_smali(self, params):
-        """Handle get_method_smali method"""
-        return self.jeb_operations.get_method_smali(params[0], params[1])
-    
-    def get_supported_methods(self):
-        """Get list of supported JSON-RPC methods with parameter info"""
-        methods_info = []
-        for method_def in get_all_methods():
-            methods_info.append({
-                "method": method_def.name,
-                "required_params": method_def.required_params,
-                "param_names": method_def.param_names,
-                "param_types": method_def.param_types,
-                "return_type": method_def.return_type,
-                "description": method_def.description
-            })
-        return methods_info
-    
-    def get_method_info(self, method_name):
-        """Get detailed information about a specific method"""
-        method_def = get_method_definition(method_name)
-        if not method_def:
-            return None
-        
-        return {
-            "method": method_def.name,
-            "required_params": method_def.required_params,
-            "param_names": method_def.param_names,
-            "param_types": method_def.param_types,
-            "return_type": method_def.return_type,
-            "description": method_def.description
-        }
-    
-    def get_method_signature(self, method_name):
-        """Get method signature for documentation purposes"""
-        method_def = get_method_definition(method_name)
-        if not method_def:
-            return None
-        
-        if method_def.required_params == 0:
-            return "{0}() -> {1}".format(method_name, method_def.return_type)
-        
-        params_str = ", ".join(["{0}: {1}".format(name, type_) for name, type_ in zip(method_def.param_names, method_def.param_types)])
-        return "{0}({1}) -> {2}".format(method_name, params_str, method_def.return_type)
