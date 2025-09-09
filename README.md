@@ -1,6 +1,6 @@
-# 🚀 JEBMCP: JEB & MCP Integration Hub
+# 🚀 JEBMCP: JEB & MCP
 
-**JEBMCP** 将 **JEB 反编译能力** 与 **MCP (Minecraft Coder Pack)** 相结合，提供高效的分析和自动化能力。  
+**JEBMCP** 将 **JEB 反编译能力** 与 **MCP (Model Context Protocol)** 相结合，提供高效的分析和自动化能力。  
 它通过 **JSON-RPC / SSE / stdio** 与 JEB 交互，并提供一套 Python 脚本，帮助你完成方法调用关系获取、类/方法重命名、代码分析等任务。
 
 ---
