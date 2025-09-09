@@ -221,7 +221,7 @@ def get_class_type_tree(class_signature, max_node_count=16):
     return _jeb_call('get_class_type_tree', class_signature, max_node_count)
 
 @mcp.tool()
-def get_superclass(class_signature):
+def get_class_superclass(class_signature):
     """Get the superclass of a given class.
 
     This function analyzes a class and returns information about its direct superclass.
@@ -232,7 +232,7 @@ def get_superclass(class_signature):
         - Package + class with dots: e.g. "com.example.MainActivity"
         - JNI-style signature: e.g. "Lcom/example/MainActivity;"
     """
-    return _jeb_call('get_superclass', class_signature)
+    return _jeb_call('get_class_superclass', class_signature)
 
 @mcp.tool()
 def get_class_interfaces(class_signature):
