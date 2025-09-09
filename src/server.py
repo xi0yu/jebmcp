@@ -107,18 +107,18 @@ def get_app_manifest():
     return _jeb_call('get_app_manifest')
 
 @mcp.tool()
-def get_method_decompiled_code(method_signature):
+def get_method_decompiled_code(class_name, method_name):
     """Get the decompiled code of the given method in the currently loaded APK project
-    Dex units use Java-style internal addresses to identify items:
+    
+    Supports multiple class name formats:
+    - Plain class name: e.g. "MainActivity"
+    - Package + class with dots: e.g. "com.example.MainActivity"
+    - JNI-style signature: e.g. "Lcom/example/MainActivity;"
 
-    - package: Lcom/abc/
-    - type: Lcom/abc/Foo;
-    - method: Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
-    - field: Lcom/abc/Foo;->flag1:Z
-
-    @param method_signature: the fully-qualified method signature to decompile, e.g. Lcom/abc/Foo;->bar(I[JLjava/Lang/String;)V
+    @param class_name: Class identifier in any of the supported forms
+    @param method_name: Name of the method to decompile (e.g. "onCreate", "onClick", "find")
     """
-    return _jeb_call('get_method_decompiled_code', method_signature)
+    return _jeb_call('get_method_decompiled_code', class_name, method_name)
 
 @mcp.tool()
 def get_class_decompiled_code(class_signature):
