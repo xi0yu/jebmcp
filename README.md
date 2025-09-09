@@ -62,6 +62,40 @@ JEBMCP 主要特性：
    pip install -r requirements.txt
    ```
 
+## 使用方法
+
+1. 配置 MCP 服务
+   - **Claude / Cursor / Trae** 在 AI 配置中配置 mcpServers 
+   ```json
+   {
+      "mcpServers": {
+         "jeb": {
+            "command": "python",
+            "args": [
+               "${JEB_MCP_PATH}/server.py"
+            ],
+            "autoApprove": [
+               "get_app_manifest",
+               "get_method_callers",
+               "get_class_decompiled_code",
+               "get_method_decompiled_code",
+               "ping",
+               "get_method_overrides",
+               "get_method_smali",
+               "get_current_project_info"
+            ]
+         }
+      }
+   }
+   ```
+
+   - **Claude 参考** [自定义 mcp 配置教程](https://docs.anthropic.com/zh-CN/docs/claude-code/mcp)
+
+2. 在 JEB 中配置 MCP 服务
+   - 打开 JEB 客户端
+   - 导航到 `工具` -> `脚本`
+   - 加载 `MCP.py` 脚本
+
 ---
 
 ## 🛠️ 项目结构
