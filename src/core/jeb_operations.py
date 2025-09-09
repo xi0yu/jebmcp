@@ -426,6 +426,62 @@ class JebOperations(object):
             print("Error getting instruction operands: %s" % str(e))
             return []
     
+    def get_class_type_tree(self, class_signature, max_node_count):
+        """Get the type tree for a given class signature
+        
+        Args:
+            class_signature (str): The class signature to analyze
+            max_node_count (int): Maximum node count to traverse
+            
+        Returns:
+            dict: Success status and type tree data
+        """
+        project = self.project_manager.get_current_project()
+        if project is None:
+            return {"success": False, "error": "No project currently loaded in JEB"}
+        
+        dex_unit = self.project_manager.find_dex_unit(project)
+        if dex_unit is None:
+            return {"success": False, "error": "No DEX unit found in the current project"}
+        
+        try:
+            # Find code node
+            code_node = dex_unit.getTypeHierarchy(convert_class_signature(class_signature), max_node_count, False)
+            if code_node is None:
+                return {"success": False, "error": "Class Node not found: %s" % class_signature}
+
+            # Build type tree
+            type_tree = self._build_type_tree(code_node)
+            
+            return {
+                "success": True,
+                "type_tree": type_tree
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": "Failed to get type tree: %s" % str(e)
+            }
+    
+    def _build_type_tree(self, node):
+        """递归构建 dict 结构"""
+        if node is None:
+            return None
+
+        obj = node.getObject()
+        node_dict = {
+            "name": obj.getName() if obj else "<?>",
+            "signature": obj.getSignature() if obj else "",
+            "children": []
+        }
+
+        if node.hasChildren():
+            for child in node.getChildren():
+                node_dict["children"].append(self._build_type_tree(child))
+
+        return node_dict
+
     def get_current_project_info(self):
         """Get detailed status information about JEB and loaded projects"""
         try:
