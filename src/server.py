@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import ast
@@ -32,7 +33,7 @@ def make_jsonrpc_request(method, *params, jeb_host="127.0.0.1", jeb_port=16161, 
             "Content-Type": "application/json"
         })
         response = conn.getresponse()
-        data = json.loads(response.read().decode())
+        data = json.loads(response.read().decode("UTF-8"))
 
         if "error" in data:
             err = data["error"]
