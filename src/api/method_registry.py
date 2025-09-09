@@ -132,6 +132,16 @@ METHOD_REGISTRY = {
         param_types=["string", "string"],
         description="Get all Smali instructions for a specific method in the given class. Supports auto JNI conversion for class signatures.",
         return_type="object"
+    ),
+    
+    "parse_protobuf_class": MethodDefinition(
+        name="parse_protobuf_class",
+        handler_method="_handle_parse_protobuf_class",
+        required_params=1,
+        param_names=["class_signature"],
+        param_types=["string"],
+        description="Parse protobuf definition for a specific class. Supports auto JNI conversion for class signatures.",
+        return_type="object"
     )
 }
 

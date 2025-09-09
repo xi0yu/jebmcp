@@ -20,6 +20,7 @@ if src_dir not in sys.path:
 
 try:
     from utils.signature_utils import convert_class_signature
+    from utils.protoParser import ProtoParser
 except ImportError:
     # Fallback: define the function inline if import fails
     import re
@@ -549,5 +550,28 @@ class JebOperations(object):
                 "dex_field_count": 0,
                 "manifest_component_count": []
             }
+    
+    def parse_protobuf_class(self, class_signature):
+        """解析指定类的protobuf定义"""
+        if not class_signature:
+            return {"success": False, "error": "Class signature is required"}
+        
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+            
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No dex unit found in the current project"}
+            
+            # 创建protobuf解析器
+            parser = ProtoParser(dex_unit)
+            result = parser.parse_class(class_signature)
+            
+            return result
+            
+        except Exception as e:
+            return {"success": False, "error": "Failed to parse protobuf class: %s" % str(e)}
 
     

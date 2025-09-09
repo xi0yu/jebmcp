@@ -188,6 +188,19 @@ def set_field_name(class_signature, field_name, new_name):
     """
     return make_jsonrpc_request('set_field_name', class_signature, field_name, new_name)
 
+@mcp.tool()
+def parse_protobuf_class(class_signature):
+    """Parse protobuf definition for a specific class.
+    
+    Supports multiple class signature formats:
+    - Plain class name: e.g. "ProtoMessage"
+    - Package + class with dots: e.g. "com.example.ProtoMessage"
+    - JNI-style signature: e.g. "Lcom/example/ProtoMessage;"
+    
+    @param class_signature: Class identifier in any of the supported forms
+    """
+    return make_jsonrpc_request('parse_protobuf_class', class_signature)
+
 def main():
     argparse.ArgumentParser(description="JEB Pro MCP Server")
     mcp.run(transport="stdio")

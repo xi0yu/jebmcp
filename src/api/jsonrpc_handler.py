@@ -105,6 +105,11 @@ class JSONRPCHandler(object):
         """Handle get_smali_instructions method"""
         return self.jeb_operations.get_smali_instructions(params[0], params[1])
     
+    @validate_params(1, ["class_signature"])
+    def _handle_parse_protobuf_class(self, params):
+        """Handle parse_protobuf_class method"""
+        return self.jeb_operations.parse_protobuf_class(params[0])
+    
     def get_supported_methods(self):
         """Get list of supported JSON-RPC methods with parameter info"""
         methods_info = []
