@@ -109,7 +109,7 @@ def get_app_manifest():
 @mcp.tool()
 def get_method_decompiled_code(class_name, method_name):
     """Get the decompiled code of the given method in the currently loaded APK project
-
+    
     Supports multiple class name formats:
     - Plain class name: e.g. "MainActivity"
     - Package + class with dots: e.g. "com.example.MainActivity"
@@ -152,7 +152,7 @@ def get_method_overrides(method_signature):
 def get_field_callers(class_name: str, field_name: str):
     """Get the callers/references of the given field in the currently loaded APK project.
 
-    @param class_name: class name in either Dalvik JNI signature (e.g. Lcom/example/Foo;)
+    @param class_name: class name in either Dalvik JNI signature (e.g. Lcom/example/Foo;) 
                        or normal Java style (e.g. com.example.Foo)
     @param field_name: the field name (e.g. flag1)
     """
@@ -162,7 +162,7 @@ def get_field_callers(class_name: str, field_name: str):
 def rename_class_name(class_name, new_name=None):
     """Rename a class in the current APK project.
 
-    This function requires a new_name to perform renaming.
+    This function requires a new_name to perform renaming. 
     If new_name is not provided, an error will be raised.
 
     @param class_name: Class signature. Supports both formats:
@@ -176,7 +176,7 @@ def rename_class_name(class_name, new_name=None):
 def rename_method_name(class_name, method_name, new_name=None):
     """Rename a method in the specified class of the current APK project.
 
-    This function requires a new_name to perform renaming.
+    This function requires a new_name to perform renaming. 
     If new_name is not provided, an error will be raised.
 
     @param class_name: Class signature. Supports both formats:
@@ -191,7 +191,7 @@ def rename_method_name(class_name, method_name, new_name=None):
 def rename_field_name(class_name, field_name, new_name):
     """Rename a field in the specified class of the current APK project.
 
-    This function requires a new_name to perform renaming.
+    This function requires a new_name to perform renaming. 
     If new_name is not provided, an error will be raised.
 
     @param class_name: Class signature. Supports both formats:
@@ -219,6 +219,34 @@ def get_class_type_tree(class_signature, max_node_count=16):
     @param max_node_count: Maximum number of nodes to traverse (default: 16)
     """
     return _jeb_call('get_class_type_tree', class_signature, max_node_count)
+
+@mcp.tool()
+def get_class_superclass(class_signature):
+    """Get the superclass of a given class.
+
+    This function analyzes a class and returns information about its direct superclass.
+    Useful for understanding inheritance hierarchy and class relationships.
+
+    @param class_signature: Class identifier. Supports multiple formats:
+        - Plain class name: e.g. "MainActivity"
+        - Package + class with dots: e.g. "com.example.MainActivity"
+        - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    """
+    return _jeb_call('get_class_superclass', class_signature)
+
+@mcp.tool()
+def get_class_interfaces(class_signature):
+    """Get all interfaces implemented by a given class.
+
+    This function analyzes a class and returns a list of all interfaces it implements,
+    including both directly implemented and inherited interfaces.
+
+    @param class_signature: Class identifier. Supports multiple formats:
+        - Plain class name: e.g. "MainActivity"
+        - Package + class with dots: e.g. "com.example.MainActivity"
+        - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    """
+    return _jeb_call('get_class_interfaces', class_signature)
 
 @mcp.tool()
 def parse_protobuf_class(class_signature):
