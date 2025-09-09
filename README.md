@@ -76,13 +76,16 @@ JEBMCP 主要特性：
             ],
             "autoApprove": [
                "get_app_manifest",
-               "get_method_callers",
                "get_class_decompiled_code",
+               "get_class_interfaces",
+               "get_class_superclass",
+               "get_class_type_tree",
+               "get_current_project_info",
+               "get_method_callers",
                "get_method_decompiled_code",
-               "ping",
                "get_method_overrides",
                "get_method_smali",
-               "get_current_project_info"
+               "ping"
             ]
          }
       }

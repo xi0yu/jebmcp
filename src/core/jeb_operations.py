@@ -578,7 +578,7 @@ class JebOperations(object):
                 "manifest_component_count": []
             }
 
-    def get_superclass(self, class_signature):
+    def get_class_superclass(self, class_signature):
         """Get the superclass of a given class
         
         Args:
@@ -589,32 +589,21 @@ class JebOperations(object):
         """
         try:
             project = self.project_manager.get_current_project()
-            if not project:
-                return {"error": "No project loaded"}
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
             
-            # Convert class signature if needed
-            converted_signature = convert_class_signature(class_signature)
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
             
-            # Find the class in DEX units
-            for unit in project.getUnitsOfType(IDexUnit, False):
-                dex_class = unit.getClass(converted_signature)
-                if dex_class:
-                    superclass = dex_class.getSupertype()
-                    if superclass:
-                        return {
-                            "class_signature": class_signature,
-                            "superclass": superclass.getSignature(False),
-                            "superclass_name": superclass.getName()
-                        }
-                    else:
-                        return {
-                            "class_signature": class_signature,
-                            "superclass": None,
-                            "message": "No superclass found (likely java.lang.Object or interface)"
-                        }
-            
-            return {"error": "Class not found: %s" % class_signature}
-            
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            return {
+                "success": True,
+                "superclass": dex_class.getSupertypeSignature(True)
+            }
         except Exception as e:
             return {"error": "Failed to get superclass: %s" % str(e)}
     
@@ -629,34 +618,25 @@ class JebOperations(object):
         """
         try:
             project = self.project_manager.get_current_project()
-            if not project:
-                return {"error": "No project loaded"}
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
             
-            # Convert class signature if needed
-            converted_signature = convert_class_signature(class_signature)
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
             
-            # Find the class in DEX units
-            for unit in project.getUnitsOfType(IDexUnit, False):
-                dex_class = unit.getClass(converted_signature)
-                if dex_class:
-                    interfaces = dex_class.getImplementedInterfaces()
-                    interface_list = []
-                    
-                    if interfaces:
-                        for interface in interfaces:
-                            interface_list.append({
-                                "signature": interface.getSignature(False),
-                                "name": interface.getName()
-                            })
-                    
-                    return {
-                        "class_signature": class_signature,
-                        "interfaces": interface_list,
-                        "interface_count": len(interface_list)
-                    }
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
             
-            return {"error": "Class not found: %s" % class_signature}
-            
+            interface_signatures = []
+            for clazz in dex_class.getInterfaceSignatures(True):
+                interface_signatures.append(clazz)
+
+            return {
+                "success": True,
+                "interfaces": interface_signatures
+            }
         except Exception as e:
             return {"error": "Failed to get class interfaces: %s" % str(e)}
 
