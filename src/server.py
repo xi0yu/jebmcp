@@ -202,6 +202,24 @@ def rename_field_name(class_name, field_name, new_name):
     """
     return _jeb_call('rename_field_name', class_name, field_name, new_name)
 
+@mcp.tool()
+def get_class_type_tree(class_signature, max_node_count=16):
+    """Build a hierarchical type tree for a class showing inheritance relationships.
+
+    This function analyzes a class and builds a tree structure showing:
+    - Superclass hierarchy
+    - Implemented interfaces
+    - Inner classes
+    - Fields and methods (limited for performance)
+
+    @param class_signature: Class identifier. Supports multiple formats:
+        - Plain class name: e.g. "MainActivity"
+        - Package + class with dots: e.g. "com.example.MainActivity"
+        - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    @param max_node_count: Maximum number of nodes to traverse (default: 16)
+    """
+    return _jeb_call('get_class_type_tree', class_signature, max_node_count)
+
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_request):

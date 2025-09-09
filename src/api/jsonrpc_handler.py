@@ -25,6 +25,7 @@ class JSONRPCHandler(object):
             "rename_field_name": jeb_operations.rename_field_name,
             "get_current_project_info": jeb_operations.get_current_project_info,
             "get_method_smali": jeb_operations.get_method_smali,
+            "get_class_type_tree": jeb_operations.get_class_type_tree,
         }
     
 
