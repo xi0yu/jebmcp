@@ -41,202 +41,196 @@ class JebOperations(object):
         self.project_manager = project_manager
         self.ctx = ctx
     
-    def get_manifest(self):
+    def get_app_manifest(self):
         """Get the manifest of the currently loaded APK project in JEB"""
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         # Find APK unit via project
         apk_unit = self.project_manager.find_apk_unit(project)
         if apk_unit is None:
-            print('No APK unit found in the current project')
-            return None
+            return {"success": False, "error": "No APK unit found in the current project"}
         
         man = apk_unit.getManifest()
         if man is None:
-            print('No manifest found in the APK unit')
-            return None
+            return {"success": False, "error": "No manifest found in the APK unit"}
         
         doc = man.getFormatter().getPresentation(0).getDocument()
         text = TextDocumentUtil.getText(doc)
-        return text
+        return {"success": True, "manifest": text}
     
-    def get_method_decompiled_code(self, method_signature):
+    def get_method_decompiled_code(self, class_name, method_name):
         """Get the decompiled code of the given method in the currently loaded APK project"""
-        if not method_signature:
-            return None
+        if not class_name or not method_name:
+            return {"success": False, "error": "Both class name and method name are required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
+            return {"success": False, "error": "No dex unit found in the current project"}
         
-        method = dex_unit.getMethod(method_signature)
+        # Find method
+        method = self._find_method(dex_unit, class_name, method_name)
         if method is None:
-            print('Method not found: %s' % method_signature)
-            return None
+            return {"success": False, "error": "Method not found: %s" % method_name}
         
         decomp = DecompilerHelper.getDecompiler(dex_unit)
         if not decomp:
-            print('Cannot acquire decompiler for unit: %s' % decomp)
-            return None
+            return {"success": False, "error": "Cannot acquire decompiler for unit"}
 
         if not decomp.decompileMethod(method.getSignature()):
-            print('Failed decompiling method')
-            return None
+            return {"success": False, "error": "Failed decompiling method"}
 
         text = decomp.getDecompiledMethodText(method.getSignature())
-        return text
-    
-    def get_class_decompiled_code(self, class_signature):
-        """Get the decompiled code of a class in the current APK project"""
-        if not class_signature:
+        return {"success": True, "decompiled_code": text, "method_signature": method.getSignature()}
+
+    def _find_method(self, dex_unit, class_signature, method_name):
+        """Find a method in the dex unit by class signature and method name"""
+        if not class_signature or not method_name:
             return None
 
-        project = self.project_manager.get_current_project()
-        if project is None:
-            print('No project currently loaded in JEB')
-            return None
-
-        dex_unit = self.project_manager.find_dex_unit(project)
-        if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
-        
         # normalize class signature for JNI format before lookup
         normalized_signature = convert_class_signature(class_signature)
         clazz = dex_unit.getClass(normalized_signature)
         if clazz is None:
-            print('Class not found: %s' % normalized_signature)
             return None
+
+        # forEach method in the class
+        for method in clazz.getMethods():
+            if method.getName() == method_name:
+                return method
+
+        return None
+    
+    def get_class_decompiled_code(self, class_signature):
+        """Get the decompiled code of a class in the current APK project"""
+        if not class_signature:
+            return {"success": False, "error": "Class signature is required"}
+
+        project = self.project_manager.get_current_project()
+        if project is None:
+            return {"success": False, "error": "No project currently loaded in JEB"}
+
+        dex_unit = self.project_manager.find_dex_unit(project)
+        if dex_unit is None:
+            return {"success": False, "error": "No dex unit found in the current project"}
+        
+        # normalize class signature for JNI format before lookup
+        clazz = dex_unit.getClass(convert_class_signature(class_signature))
+        if clazz is None:
+            return {"success": False, "error": "Class not found: %s" % class_signature}
         
         decomp = DecompilerHelper.getDecompiler(dex_unit)
         if not decomp:
-            print('Cannot acquire decompiler for unit: %s' % decomp)
-            return None
+            return {"success": False, "error": "Cannot acquire decompiler for unit"}
 
         if not decomp.decompileClass(clazz.getSignature()):
-            print('Failed decompiling class')
-            return None
+            return {"success": False, "error": "Failed decompiling class"}
 
         text = decomp.getDecompiledClassText(clazz.getSignature())
-        return text
+        return {"success": True, "decompiled_code": text, "class_signature": clazz.getSignature()}
     
     def get_method_callers(self, method_signature):
         """Get the callers of the given method in the currently loaded APK project"""
         if not method_signature:
-            return None
+            return {"success": False, "error": "Method signature is required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
+            return {"success": False, "error": "No dex unit found in the current project"}
         
         ret = []
         method = dex_unit.getMethod(method_signature)
         if method is None:
-            print("Method not found: %s" % method_signature)
-            return None
+            return {"success": False, "error": "Method not found: %s" % method_signature}
         
         action_xrefs_data = ActionXrefsData()
         action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, method.getItemId(), None)
         if dex_unit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
                 ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
-        return ret
+        return {"success": True, "method_signature": method_signature, "callers": ret}
     
-    def get_field_callers(self, field_signature):
+    def get_field_callers(self, class_name, field_name):
         """Get the callers/references of the given field in the currently loaded APK project"""
-        if not field_signature:
-            return None
+        if not class_name or not field_name:
+            return {"success": False, "error": "Both class signature and method name are required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
-        
-        ret = []
-        # Parse field signature to get class and field name
-        # Field signature format: Lcom/example/Class;->fieldName:Type
-        if '->' not in field_signature:
-            print("Invalid field signature format. Expected: Lcom/example/Class;->fieldName:Type")
-            return None
-        
-        class_part, field_part = field_signature.split('->', 1)
-        if not class_part.endswith(';'):
-            class_part += ';'
+            return {"success": False, "error": "No dex unit found in the current project"}
         
         # Get the class first
-        clazz = dex_unit.getClass(class_part)
-        if clazz is None:
-            print("Class not found: %s" % class_part)
-            return None
+        dex_class = dex_unit.getClass(convert_class_signature(class_name))
+        if dex_class is None:
+            return {"success": False, "error": "Class not found: %s" % class_name}
         
         # Find the field in the class
         field = None
-        for f in clazz.getFields():
-            if f.getSignature() == field_signature:
+        for f in dex_class.getFields():
+            if f.getName() == field_name:
                 field = f
                 break
         
         if field is None:
-            print("Field not found: %s" % field_signature)
-            return None
-        
+            return {"success": False, "error": "Field not found: %s" % field_name}
+
         # Use the same approach as method callers - query cross-references
         action_xrefs_data = ActionXrefsData()
         action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, field.getItemId(), None)
+        field_xrefs = []
         if dex_unit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
-                ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
-        return ret
+                field_xrefs.append({
+                    "address": str(action_xrefs_data.getAddresses()[i]),
+                    "description": str(action_xrefs_data.getDetails()[i])
+                })
+
+        return {
+            "success": True,
+            "class_name": class_name,
+            "field_name": field_name,
+            "field_xrefs": field_xrefs
+        }
     
     def get_method_overrides(self, method_signature):
         """Get the overrides of the given method in the currently loaded APK project"""
         if not method_signature:
-            return None
+            return {"success": False, "error": "Method signature is required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
-            print('No project currently loaded in JEB')
-            return None
+            return {"success": False, "error": "No project currently loaded in JEB"}
         
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
-            print('No dex unit found in the current project')
-            return None
+            return {"success": False, "error": "No dex unit found in the current project"}
         
         ret = []
         method = dex_unit.getMethod(method_signature)
         if method is None:
-            print("Method not found: %s" % method_signature)
-            return None
+            return {"success": False, "error": "Method not found: %s" % method_signature}
         
         data = ActionOverridesData()
         action_context = ActionContext(dex_unit, Actions.QUERY_OVERRIDES, method.getItemId(), None)
         if dex_unit.prepareExecution(action_context, data):
             for i in range(data.getAddresses().size()):
                 ret.append((data.getAddresses()[i], data.getDetails()[i]))
-        return ret
+        return {"success": True, "method_signature": method_signature, "overrides": ret}
     
-    def set_class_name(self, class_name, new_name):
+    def rename_class_name(self, class_name, new_name):
         """Set the name of a class in the current APK project"""
         if not class_name:
             return {"success": False, "error": "class name is required"}
@@ -266,7 +260,7 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to set class name. exception: %s" % str(e)}
     
-    def set_method_name(self, class_name, method_name, new_name):
+    def rename_method_name(self, class_name, method_name, new_name):
         """Set the name of a method in the specified class"""
         if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -303,9 +297,9 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, normalized_signature, str(e))}
+            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, class_name, str(e))}
     
-    def set_field_name(self, class_name, field_name, new_name):
+    def rename_field_name(self, class_name, field_name, new_name):
         """Set the name of a field in the specified class"""
         if not class_name or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
@@ -345,9 +339,9 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, normalized_signature, str(e))}
+            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, class_name, str(e))}
     
-    def get_smali_instructions(self, class_signature, method_name):
+    def get_method_smali(self, class_signature, method_name):
         """Get all Smali instructions for a specific method in the given class"""
         if not class_signature or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -379,7 +373,6 @@ class JebOperations(object):
                     found_methods.append({
                         "signature": method.getSignature(),
                         "name": method.getName(),
-                        "descriptor": method.getDescriptor(),
                         "smali_instructions": smali_instructions
                     })
             
@@ -403,7 +396,7 @@ class JebOperations(object):
             instructions = []
             
             # Get all instructions
-            instruction_count = method.getInstructions().getInstructionCount()
+            instruction_count = method.getInstructions().size()
             for i in range(instruction_count):
                 instruction = method.getInstructions().getInstruction(i)
                 if instruction is not None:
@@ -447,7 +440,63 @@ class JebOperations(object):
             print("Error getting instruction operands: %s" % str(e))
             return []
     
-    def check_status(self):
+    def get_class_type_tree(self, class_signature, max_node_count):
+        """Get the type tree for a given class signature
+
+        Args:
+            class_signature (str): The class signature to analyze
+            max_node_count (int): Maximum node count to traverse
+
+        Returns:
+            dict: Success status and type tree data
+        """
+        project = self.project_manager.get_current_project()
+        if project is None:
+            return {"success": False, "error": "No project currently loaded in JEB"}
+
+        dex_unit = self.project_manager.find_dex_unit(project)
+        if dex_unit is None:
+            return {"success": False, "error": "No DEX unit found in the current project"}
+
+        try:
+            # Find code node
+            code_node = dex_unit.getTypeHierarchy(convert_class_signature(class_signature), max_node_count, False)
+            if code_node is None:
+                return {"success": False, "error": "Class Node not found: %s" % class_signature}
+
+            # Build type tree
+            type_tree = self._build_type_tree(code_node)
+
+            return {
+                "success": True,
+                "type_tree": type_tree
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": "Failed to get type tree: %s" % str(e)
+            }
+
+    def _build_type_tree(self, node):
+        """递归构建 dict 结构"""
+        if node is None:
+            return None
+
+        obj = node.getObject()
+        node_dict = {
+            "name": obj.getName() if obj else "<?>",
+            "signature": obj.getSignature() if obj else "",
+            "children": []
+        }
+
+        if node.hasChildren():
+            for child in node.getChildren():
+                node_dict["children"].append(self._build_type_tree(child))
+
+        return node_dict
+
+    def get_current_project_info(self):
         """Get detailed status information about JEB and loaded projects"""
         try:
             # Check MCP to JEB connection
@@ -461,12 +510,10 @@ class JebOperations(object):
                 connection_status = "disconnected"
             
             # Get project info
-            projects_info = []
+            project_info = ""
             if connection_status == "connected":
                 try:
                     project_info = self._get_project_details(project)
-                    if project_info:
-                        projects_info.append(project_info)
                 except Exception as e:
                     print("Error getting project: %s" % str(e))
             
@@ -478,10 +525,7 @@ class JebOperations(object):
                     "status": connection_status,
                     "message": "MCP to JEB connection status"
                 },
-                "projects": {
-                    "count": len(projects_info),
-                    "details": projects_info
-                },
+                "project_info": project_info,
                 "jeb_version": jeb_version
             }
             
@@ -491,10 +535,7 @@ class JebOperations(object):
                     "status": "error",
                     "message": "Failed to check status: %s" % str(e)
                 },
-                "projects": {
-                    "count": 0,
-                    "details": []
-                },
+                "project": None,
                 "jeb_version": None
             }
     
@@ -550,27 +591,27 @@ class JebOperations(object):
                 "dex_field_count": 0,
                 "manifest_component_count": []
             }
-    
+
     def parse_protobuf_class(self, class_signature):
         """解析指定类的protobuf定义"""
         if not class_signature:
             return {"success": False, "error": "Class signature is required"}
-        
+
         try:
             project = self.project_manager.get_current_project()
             if project is None:
                 return {"success": False, "error": "No project currently loaded in JEB"}
-            
+
             dex_unit = self.project_manager.find_dex_unit(project)
             if dex_unit is None:
                 return {"success": False, "error": "No dex unit found in the current project"}
-            
+
             # 创建protobuf解析器
             parser = ProtoParser(dex_unit)
             result = parser.parse_class(class_signature)
-            
+
             return result
-            
+
         except Exception as e:
             return {"success": False, "error": "Failed to parse protobuf class: %s" % str(e)}
 
