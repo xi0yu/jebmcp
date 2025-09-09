@@ -578,4 +578,86 @@ class JebOperations(object):
                 "manifest_component_count": []
             }
 
+    def get_superclass(self, class_signature):
+        """Get the superclass of a given class
+        
+        Args:
+            class_signature (str): The class signature to analyze
+            
+        Returns:
+            dict: Contains superclass information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if not project:
+                return {"error": "No project loaded"}
+            
+            # Convert class signature if needed
+            converted_signature = convert_class_signature(class_signature)
+            
+            # Find the class in DEX units
+            for unit in project.getUnitsOfType(IDexUnit, False):
+                dex_class = unit.getClass(converted_signature)
+                if dex_class:
+                    superclass = dex_class.getSupertype()
+                    if superclass:
+                        return {
+                            "class_signature": class_signature,
+                            "superclass": superclass.getSignature(False),
+                            "superclass_name": superclass.getName()
+                        }
+                    else:
+                        return {
+                            "class_signature": class_signature,
+                            "superclass": None,
+                            "message": "No superclass found (likely java.lang.Object or interface)"
+                        }
+            
+            return {"error": "Class not found: %s" % class_signature}
+            
+        except Exception as e:
+            return {"error": "Failed to get superclass: %s" % str(e)}
+    
+    def get_class_interfaces(self, class_signature):
+        """Get all interfaces implemented by a given class
+        
+        Args:
+            class_signature (str): The class signature to analyze
+            
+        Returns:
+            dict: Contains interfaces information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if not project:
+                return {"error": "No project loaded"}
+            
+            # Convert class signature if needed
+            converted_signature = convert_class_signature(class_signature)
+            
+            # Find the class in DEX units
+            for unit in project.getUnitsOfType(IDexUnit, False):
+                dex_class = unit.getClass(converted_signature)
+                if dex_class:
+                    interfaces = dex_class.getImplementedInterfaces()
+                    interface_list = []
+                    
+                    if interfaces:
+                        for interface in interfaces:
+                            interface_list.append({
+                                "signature": interface.getSignature(False),
+                                "name": interface.getName()
+                            })
+                    
+                    return {
+                        "class_signature": class_signature,
+                        "interfaces": interface_list,
+                        "interface_count": len(interface_list)
+                    }
+            
+            return {"error": "Class not found: %s" % class_signature}
+            
+        except Exception as e:
+            return {"error": "Failed to get class interfaces: %s" % str(e)}
+
     

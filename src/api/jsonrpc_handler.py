@@ -26,6 +26,8 @@ class JSONRPCHandler(object):
             "get_current_project_info": jeb_operations.get_current_project_info,
             "get_method_smali": jeb_operations.get_method_smali,
             "get_class_type_tree": jeb_operations.get_class_type_tree,
+            "get_superclass": jeb_operations.get_superclass,
+            "get_class_interfaces": jeb_operations.get_class_interfaces,
         }
     
 

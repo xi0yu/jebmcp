@@ -220,6 +220,34 @@ def get_class_type_tree(class_signature, max_node_count=16):
     """
     return _jeb_call('get_class_type_tree', class_signature, max_node_count)
 
+@mcp.tool()
+def get_superclass(class_signature):
+    """Get the superclass of a given class.
+
+    This function analyzes a class and returns information about its direct superclass.
+    Useful for understanding inheritance hierarchy and class relationships.
+
+    @param class_signature: Class identifier. Supports multiple formats:
+        - Plain class name: e.g. "MainActivity"
+        - Package + class with dots: e.g. "com.example.MainActivity"
+        - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    """
+    return _jeb_call('get_superclass', class_signature)
+
+@mcp.tool()
+def get_class_interfaces(class_signature):
+    """Get all interfaces implemented by a given class.
+
+    This function analyzes a class and returns a list of all interfaces it implements,
+    including both directly implemented and inherited interfaces.
+
+    @param class_signature: Class identifier. Supports multiple formats:
+        - Plain class name: e.g. "MainActivity"
+        - Package + class with dots: e.g. "com.example.MainActivity"
+        - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+    """
+    return _jeb_call('get_class_interfaces', class_signature)
+
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_request):
