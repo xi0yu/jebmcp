@@ -18,22 +18,8 @@ src_dir = os.path.dirname(current_dir)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-try:
-    from utils.signature_utils import convert_class_signature
-    from utils.protoParser import ProtoParser
-except ImportError:
-    # Fallback: define the function inline if import fails
-    import re
-    def convert_class_signature(class_name):
-        """Fallback implementation of convert_class_signature"""
-        if not class_name:
-            return None
-        pattern = r'^L[^;]+;$'
-        if re.match(pattern, class_name):
-            return class_name
-        else:
-            return 'L' + class_name.replace('.', '/') + ';'
-
+from utils.signature_utils import convert_class_signature
+from utils.protoParser import ProtoParser
 class JebOperations(object):
     """Handles all JEB-specific operations for APK/DEX analysis"""
     
@@ -92,18 +78,18 @@ class JebOperations(object):
         """Find a method in the dex unit by class signature and method name"""
         if not class_signature or not method_name:
             return None
-
+        
         # normalize class signature for JNI format before lookup
         normalized_signature = convert_class_signature(class_signature)
         clazz = dex_unit.getClass(normalized_signature)
         if clazz is None:
             return None
-
+        
         # forEach method in the class
         for method in clazz.getMethods():
             if method.getName() == method_name:
                 return method
-
+        
         return None
     
     def get_class_decompiled_code(self, class_signature):
@@ -197,7 +183,7 @@ class JebOperations(object):
                     "address": str(action_xrefs_data.getAddresses()[i]),
                     "description": str(action_xrefs_data.getDetails()[i])
                 })
-
+        
         return {
             "success": True,
             "class_name": class_name,
@@ -442,22 +428,22 @@ class JebOperations(object):
     
     def get_class_type_tree(self, class_signature, max_node_count):
         """Get the type tree for a given class signature
-
+        
         Args:
             class_signature (str): The class signature to analyze
             max_node_count (int): Maximum node count to traverse
-
+            
         Returns:
             dict: Success status and type tree data
         """
         project = self.project_manager.get_current_project()
         if project is None:
             return {"success": False, "error": "No project currently loaded in JEB"}
-
+        
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
             return {"success": False, "error": "No DEX unit found in the current project"}
-
+        
         try:
             # Find code node
             code_node = dex_unit.getTypeHierarchy(convert_class_signature(class_signature), max_node_count, False)
@@ -466,18 +452,18 @@ class JebOperations(object):
 
             # Build type tree
             type_tree = self._build_type_tree(code_node)
-
+            
             return {
                 "success": True,
                 "type_tree": type_tree
             }
-
+            
         except Exception as e:
             return {
                 "success": False,
                 "error": "Failed to get type tree: %s" % str(e)
             }
-
+    
     def _build_type_tree(self, node):
         """递归构建 dict 结构"""
         if node is None:
@@ -592,6 +578,68 @@ class JebOperations(object):
                 "manifest_component_count": []
             }
 
+    def get_class_superclass(self, class_signature):
+        """Get the superclass of a given class
+
+        Args:
+            class_signature (str): The class signature to analyze
+
+        Returns:
+            dict: Contains superclass information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            return {
+                "success": True,
+                "superclass": dex_class.getSupertypeSignature(True)
+            }
+        except Exception as e:
+            return {"error": "Failed to get superclass: %s" % str(e)}
+
+    def get_class_interfaces(self, class_signature):
+        """Get all interfaces implemented by a given class
+
+        Args:
+            class_signature (str): The class signature to analyze
+
+        Returns:
+            dict: Contains interfaces information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            interface_signatures = []
+            for clazz in dex_class.getInterfaceSignatures(True):
+                interface_signatures.append(clazz)
+
+            return {
+                "success": True,
+                "interfaces": interface_signatures
+            }
+        except Exception as e:
+            return {"error": "Failed to get class interfaces: %s" % str(e)}
+
     def parse_protobuf_class(self, class_signature):
         """解析指定类的protobuf定义"""
         if not class_signature:
@@ -615,4 +663,3 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to parse protobuf class: %s" % str(e)}
 
-    

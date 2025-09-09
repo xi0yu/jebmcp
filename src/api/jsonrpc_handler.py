@@ -10,7 +10,7 @@ class JSONRPCHandler(object):
     
     def __init__(self, jeb_operations):
         self.jeb_operations = jeb_operations
-
+        
         # 直接映射到jeb_operations的方法，无需包装函数
         self.method_handlers = {
             "ping": lambda params: "pong",  # ping方法特殊处理
@@ -26,6 +26,8 @@ class JSONRPCHandler(object):
             "get_current_project_info": jeb_operations.get_current_project_info,
             "get_method_smali": jeb_operations.get_method_smali,
             "get_class_type_tree": jeb_operations.get_class_type_tree,
+            "get_class_superclass": jeb_operations.get_class_superclass,
+            "get_class_interfaces": jeb_operations.get_class_interfaces,
             "parse_protobuf_class": jeb_operations.parse_protobuf_class,
         }
 
@@ -33,21 +35,21 @@ class JSONRPCHandler(object):
     def _get_jeb_method_signature(self, method_name):
         if not hasattr(self.jeb_operations, method_name):
             return None
-
+        
         jeb_method = getattr(self.jeb_operations, method_name)
         args, varargs, varkw, defaults = inspect.getargspec(jeb_method)
-
+        
         if args and args[0] == 'self':
             args = args[1:]
-
+        
         required_count = len(args) - (len(defaults) if defaults else 0)
-
+        
         return {
             'required_params': required_count,
             'total_params': len(args),
             'param_names': args
         }
-
+    
     def handle_request(self, method, params):
         """Handle JSON-RPC method calls using direct method mapping"""
         try:
