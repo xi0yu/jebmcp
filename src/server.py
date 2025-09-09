@@ -62,18 +62,20 @@ def _jeb_call(method, *params):
 #       MCP 工具定义
 # -----------------------------
 @mcp.tool()
-def check_status():
-    """Get detailed status information about JEB and loaded projects
+def get_current_project_info():
+    """Retrieve detailed information about the current JEB session and loaded projects.
 
-    Returns comprehensive information including:
+    Returns a dictionary containing:
     - MCP to JEB connection status
-    - Number of open projects
+    - Number of currently open projects
     - Project details (name, APK/DEX counts)
-    - APK information (package name, version, file size, MD5)
-    - DEX information (class count, method count)
+    - APK metadata (package name, version, file size, MD5)
+    - DEX metadata (number of classes, methods)
     - JEB version information
+
+    This function only retrieves information and does not modify any project.
     """
-    return _jeb_call('check_status')
+    return _jeb_call('get_current_project_info')
 
 @mcp.tool()
 def get_method_smali(class_signature, method_name):
@@ -100,9 +102,9 @@ def ping():
         return f"Failed to connect to JEB Pro! Did you run Edit -> Scripts -> MCP ({shortcut}) to start the server?"
 
 @mcp.tool()
-def get_manifest():
+def get_app_manifest():
     """Get the manifest of the currently loaded APK project in JEB"""
-    return _jeb_call('get_manifest')
+    return _jeb_call('get_app_manifest')
 
 @mcp.tool()
 def get_method_decompiled_code(method_signature):
@@ -157,45 +159,48 @@ def get_field_callers(class_name: str, field_name: str):
     return _jeb_call('get_field_callers', class_name, field_name)
 
 @mcp.tool()
-def set_class_name(class_name, new_name=None):
-    """Set the name of a class in the current APK project.
+def rename_class_name(class_name, new_name=None):
+    """Rename a class in the current APK project.
 
-    If new_name is provided, it will rename the class. If not provided, it will return current class info.
+    This function requires a new_name to perform renaming. 
+    If new_name is not provided, an error will be raised.
 
-    @param class_name: Class signature. Supports both:
+    @param class_name: Class signature. Supports both formats:
         - JNI format, e.g. Lcom/example/MyClass;
         - Java format, e.g. com.example.MyClass
-    @param new_name: Optional new name for the class
+    @param new_name: Optional new class name
     """
-    return _jeb_call('set_class_name', class_name, new_name)
+    return _jeb_call('rename_class_name', class_name, new_name)
 
 @mcp.tool()
-def set_method_name(class_name, method_name, new_name=None):
-    """Set the name of a method in the specified class.
+def rename_method_name(class_name, method_name, new_name=None):
+    """Rename a method in the specified class of the current APK project.
 
-    If new_name is provided, it will rename the method. If not provided, it will return current method info.
+    This function requires a new_name to perform renaming. 
+    If new_name is not provided, an error will be raised.
 
-    @param class_name: Class signature. Supports both:
+    @param class_name: Class signature. Supports both formats:
         - JNI format, e.g. Lcom/example/MyClass;
         - Java format, e.g. com.example.MyClass
-    @param method_name: Current name of the method
-    @param new_name: Optional new name for the method
+    @param method_name: Original name of the method to rename
+    @param new_name: New method name to set (required)
     """
-    return _jeb_call('set_method_name', class_name, method_name, new_name)
+    return _jeb_call('rename_method_name', class_name, method_name, new_name)
 
 @mcp.tool()
-def set_field_name(class_signature, field_name, new_name=None):
-    """Set the name of a field in the specified class.
+def rename_field_name(class_name, field_name, new_name):
+    """Rename a field in the specified class of the current APK project.
 
-    If new_name is provided, it will rename the field. If not provided, it will return current field info.
+    This function requires a new_name to perform renaming. 
+    If new_name is not provided, an error will be raised.
 
-    @param class_name: Class signature. Supports both:
+    @param class_name: Class signature. Supports both formats:
         - JNI format, e.g. Lcom/example/MyClass;
         - Java format, e.g. com.example.MyClass
-    @param field_name: Current name of the field
-    @param new_name: Optional new name for the field
+    @param field_name: Original name of the field to rename
+    @param new_name: New field name to set (required)
     """
-    return _jeb_call('set_field_name', class_signature, field_name, new_name)
+    return _jeb_call('rename_field_name', class_name, field_name, new_name)
 
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）
 @mcp.custom_route("/health", methods=["GET"])
@@ -209,7 +214,7 @@ async def health(_request):
 def main():
     parser = argparse.ArgumentParser(description="JEB Pro MCP Server (SSE/HTTP)")
     parser.add_argument("--transport", choices=["sse", "http", "stdio"], default=os.environ.get("TRANSPORT", "stdio"),
-                        help="MCP 传输协议：sse(默认)、http、stdio")
+                        help="MCP 传输协议：sse、http、stdio(默认)")
     parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"),
                         help="对外绑定地址（sse/http 有效）")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "16162")),

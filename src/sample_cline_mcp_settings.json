@@ -13,14 +13,14 @@
       "timeout": 1800,
       "disabled": false,
       "autoApprove": [
-        "get_manifest",
+        "get_app_manifest",
         "get_method_callers",
         "get_class_decompiled_code",
         "get_method_decompiled_code",
         "ping",
         "get_method_overrides",
         "get_method_smali",
-        "check_status"
+        "get_current_project_info"
       ]
     }
   }

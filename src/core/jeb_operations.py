@@ -40,7 +40,7 @@ class JebOperations(object):
         self.project_manager = project_manager
         self.ctx = ctx
     
-    def get_manifest(self):
+    def get_app_manifest(self):
         """Get the manifest of the currently loaded APK project in JEB"""
         project = self.project_manager.get_current_project()
         if project is None:
@@ -230,7 +230,7 @@ class JebOperations(object):
                 ret.append((data.getAddresses()[i], data.getDetails()[i]))
         return ret
     
-    def set_class_name(self, class_name, new_name):
+    def rename_class_name(self, class_name, new_name):
         """Set the name of a class in the current APK project"""
         if not class_name:
             return {"success": False, "error": "class name is required"}
@@ -260,7 +260,7 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to set class name. exception: %s" % str(e)}
     
-    def set_method_name(self, class_name, method_name, new_name):
+    def rename_method_name(self, class_name, method_name, new_name):
         """Set the name of a method in the specified class"""
         if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -299,7 +299,7 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, class_name, str(e))}
     
-    def set_field_name(self, class_name, field_name, new_name):
+    def rename_field_name(self, class_name, field_name, new_name):
         """Set the name of a field in the specified class"""
         if not class_name or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
@@ -440,7 +440,7 @@ class JebOperations(object):
             print("Error getting instruction operands: %s" % str(e))
             return []
     
-    def check_status(self):
+    def get_current_project_info(self):
         """Get detailed status information about JEB and loaded projects"""
         try:
             # Check MCP to JEB connection
@@ -454,12 +454,10 @@ class JebOperations(object):
                 connection_status = "disconnected"
             
             # Get project info
-            projects_info = []
+            project_info = ""
             if connection_status == "connected":
                 try:
                     project_info = self._get_project_details(project)
-                    if project_info:
-                        projects_info.append(project_info)
                 except Exception as e:
                     print("Error getting project: %s" % str(e))
             
@@ -471,10 +469,7 @@ class JebOperations(object):
                     "status": connection_status,
                     "message": "MCP to JEB connection status"
                 },
-                "projects": {
-                    "count": len(projects_info),
-                    "details": projects_info
-                },
+                "project_info": project_info,
                 "jeb_version": jeb_version
             }
             
@@ -484,10 +479,7 @@ class JebOperations(object):
                     "status": "error",
                     "message": "Failed to check status: %s" % str(e)
                 },
-                "projects": {
-                    "count": 0,
-                    "details": []
-                },
+                "project": None,
                 "jeb_version": None
             }
     
