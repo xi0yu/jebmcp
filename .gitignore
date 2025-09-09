@@ -1,5 +1,7 @@
 *.lock
+.idea/
 .venv/
+.cursor/
 __pycache__/
 *.py[cod]
 *.egg-info/
