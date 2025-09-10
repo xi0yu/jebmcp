@@ -3,6 +3,7 @@
 JEB operations module - handles all business logic for APK/DEX operations
 """
 import hashlib
+from com.pnfsoftware.jeb.core.units.code import ICodeItem
 from com.pnfsoftware.jeb.core.units.code.android import IApkUnit, IDexUnit
 from com.pnfsoftware.jeb.core.util import DecompilerHelper
 from com.pnfsoftware.jeb.core.output.text import TextDocumentUtil
@@ -68,11 +69,11 @@ class JebOperations(object):
         if not decomp:
             return {"success": False, "error": "Cannot acquire decompiler for unit"}
 
-        if not decomp.decompileMethod(method.getSignature()):
+        if not decomp.decompileMethod(method.getSignature(True)):
             return {"success": False, "error": "Failed decompiling method"}
 
-        text = decomp.getDecompiledMethodText(method.getSignature())
-        return {"success": True, "decompiled_code": text, "method_signature": method.getSignature()}
+        text = decomp.getDecompiledMethodText(method.getSignature(True))
+        return {"success": True, "decompiled_code": text, "method_signature": method.getSignature(True)}
 
     def _find_method(self, dex_unit, class_signature, method_name):
         """Find a method in the dex unit by class signature and method name"""
@@ -114,11 +115,11 @@ class JebOperations(object):
         if not decomp:
             return {"success": False, "error": "Cannot acquire decompiler for unit"}
 
-        if not decomp.decompileClass(clazz.getSignature()):
+        if not decomp.decompileClass(clazz.getSignature(True)):
             return {"success": False, "error": "Failed decompiling class"}
 
-        text = decomp.getDecompiledClassText(clazz.getSignature())
-        return {"success": True, "decompiled_code": text, "class_signature": clazz.getSignature()}
+        text = decomp.getDecompiledClassText(clazz.getSignature(True))
+        return {"success": True, "decompiled_code": text, "class_signature": clazz.getSignature(True)}
     
     def get_method_callers(self, method_signature):
         """Get the callers of the given method in the currently loaded APK project"""
@@ -357,7 +358,7 @@ class JebOperations(object):
                     smali_instructions = self._get_method_smali_instructions(method)
                     
                     found_methods.append({
-                        "signature": method.getSignature(),
+                        "signature": method.getSignature(True),
                         "name": method.getName(),
                         "smali_instructions": smali_instructions
                     })
@@ -472,7 +473,7 @@ class JebOperations(object):
         obj = node.getObject()
         node_dict = {
             "name": obj.getName() if obj else "<?>",
-            "signature": obj.getSignature() if obj else "",
+            "signature": obj.getSignature(True) if obj else "",
             "children": []
         }
 
@@ -663,3 +664,146 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to parse protobuf class: %s" % str(e)}
 
+    def get_class_methods(self, class_signature):
+        """Get all methods of a given class
+
+        Args:
+            class_signature (str): The class signature to analyze
+
+        Returns:
+            dict: Contains methods information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            methods = []
+            for method in dex_class.getMethods():
+                method_info = {
+                    "name": method.getName(),
+                    "signature": method.getSignature(True),
+                    "return_type": method.getReturnType().getSignature() if method.getReturnType() else "void",
+                    "parameters": [],
+                    "access_flags": GenericFlagParser.parse_flags(method.getGenericFlags())
+                }
+                
+                # Get parameter types
+                param_types = method.getParameterTypes()
+                if param_types:
+                    for param_type in param_types:
+                        method_info["parameters"].append(param_type.getSignature(True))
+                
+                methods.append(method_info)
+
+            return {
+                "success": True,
+                "class_signature": class_signature,
+                "methods": methods,
+                "method_count": len(methods)
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": "Failed to get class methods: %s" % str(e)}
+
+    def get_class_fields(self, class_signature):
+        """Get all fields of a given class
+
+        Args:
+            class_signature (str): The class signature to analyze
+
+        Returns:
+            dict: Contains fields information or error details
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            fields = []
+            for field in dex_class.getFields():
+                field_info = {
+                    "name": field.getName(),
+                    "signature": field.getSignature(True),
+                    "type": field.getType().getSignature(True) if field.getType() else "unknown",
+                    "access_flags": GenericFlagParser.parse_flags(field.getGenericFlags())
+                }
+                
+                # Get initial value if available
+                try:
+                    initial_value = field.getInitialValue()
+                    if initial_value is not None:
+                        field_info["initial_value"] = str(initial_value)
+                    else:
+                        field_info["initial_value"] = None
+                except:
+                    field_info["initial_value"] = None
+                
+                fields.append(field_info)
+
+            return {
+                "success": True,
+                "class_signature": class_signature,
+                "fields": fields,
+                "field_count": len(fields)
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": "Failed to get class fields: %s" % str(e)}
+
+class GenericFlagParser:
+    """解析 ICodeItem.getGenericFlags() 返回值，将其转换为可读标志列表"""
+
+    FLAGS = {
+        ICodeItem.FLAG_PUBLIC:        "PUBLIC",
+        ICodeItem.FLAG_PRIVATE:       "PRIVATE",
+        ICodeItem.FLAG_PROTECTED:     "PROTECTED",
+        ICodeItem.FLAG_STATIC:        "STATIC",
+        ICodeItem.FLAG_FINAL:         "FINAL",
+        ICodeItem.FLAG_SYNCHRONIZED:  "SYNCHRONIZED",
+        ICodeItem.FLAG_VOLATILE:      "VOLATILE",
+        ICodeItem.FLAG_TRANSIENT:     "TRANSIENT",
+        ICodeItem.FLAG_NATIVE:        "NATIVE",
+        ICodeItem.FLAG_INTERFACE:     "INTERFACE",
+        ICodeItem.FLAG_ABSTRACT:      "ABSTRACT",
+        ICodeItem.FLAG_STRICT:        "STRICT",
+        ICodeItem.FLAG_SYNTHETIC:     "SYNTHETIC",
+        ICodeItem.FLAG_ANNOTATION:    "ANNOTATION",
+        ICodeItem.FLAG_ENUM:          "ENUM",
+        ICodeItem.FLAG_CONSTRUCTOR:   "CONSTRUCTOR",
+        ICodeItem.FLAG_DECLARED_SYNCHRONIZED: "DECLARED_SYNCHRONIZED",
+        ICodeItem.FLAG_INNER:         "INNER",
+        ICodeItem.FLAG_ANONYMOUS:     "ANONYMOUS",
+        ICodeItem.FLAG_ARTIFICIAL:    "ARTIFICIAL",
+        ICodeItem.FLAG_INTERNAL:      "INTERNAL",
+        ICodeItem.FLAG_VARARGS:       "VARARGS",
+        ICodeItem.FLAG_VIRTUAL:       "VIRTUAL",
+        ICodeItem.FLAG_BRIDGE:        "BRIDGE",
+        ICodeItem.FLAG_DESTRUCTOR:    "DESTRUCTOR",
+    }
+
+    @classmethod
+    def parse_flags(cls, value):
+        """
+        解析 getGenericFlags() 的结果，返回值与所含标志列表。
+        :param code_item: 实现 ICodeItem（如 ICodeClass、ICodeMethod 等）
+        :return: dict，包含 'value'（原始整数标志）和 'flags'（可读标志名列表）
+        """
+        active = [name for bit, name in cls.FLAGS.items() if value & bit]
+        return {"value": value, "flags": active}

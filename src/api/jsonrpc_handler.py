@@ -29,6 +29,8 @@ class JSONRPCHandler(object):
             "get_class_superclass": jeb_operations.get_class_superclass,
             "get_class_interfaces": jeb_operations.get_class_interfaces,
             "parse_protobuf_class": jeb_operations.parse_protobuf_class,
+            "get_class_methods": jeb_operations.get_class_methods,
+            "get_class_fields": jeb_operations.get_class_fields,
         }
 
 
