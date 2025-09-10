@@ -262,6 +262,38 @@ def parse_protobuf_class(class_signature):
     """
     return make_jsonrpc_request('parse_protobuf_class', class_signature)
 
+@mcp.tool()
+def get_class_methods(class_signature):
+    """Get all methods of a given class.
+
+    This function analyzes a class and returns detailed information about all its methods,
+    including method signatures, return types, parameters, and access modifiers.
+
+    Supports multiple class signature formats:
+    - Plain class name: e.g. "MainActivity"
+    - Package + class with dots: e.g. "com.example.MainActivity"
+    - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+
+    @param class_signature: Class identifier in any of the supported forms
+    """
+    return _jeb_call('get_class_methods', class_signature)
+
+@mcp.tool()
+def get_class_fields(class_signature):
+    """Get all fields of a given class.
+
+    This function analyzes a class and returns detailed information about all its fields,
+    including field types, access modifiers, and initial values when available.
+
+    Supports multiple class signature formats:
+    - Plain class name: e.g. "MainActivity"
+    - Package + class with dots: e.g. "com.example.MainActivity"
+    - JNI-style signature: e.g. "Lcom/example/MainActivity;"
+
+    @param class_signature: Class identifier in any of the supported forms
+    """
+    return _jeb_call('get_class_fields', class_signature)
+
 
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）
 @mcp.custom_route("/health", methods=["GET"])
