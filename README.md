@@ -75,17 +75,22 @@ JEBMCP 主要特性：
                "${JEB_MCP_PATH}/server.py"
             ],
             "autoApprove": [
-               "get_app_manifest",
-               "get_class_decompiled_code",
-               "get_class_interfaces",
-               "get_class_superclass",
-               "get_class_type_tree",
+               "ping", 
+               "has_projects", 
+               "get_projects", 
                "get_current_project_info",
-               "get_method_callers",
+               "get_app_manifest", 
+               "get_class_decompiled_code", 
                "get_method_decompiled_code",
-               "get_method_overrides",
-               "get_method_smali",
-               "ping"
+               "get_method_smali", 
+               "get_class_methods", 
+               "get_class_fields",
+               "get_class_superclass", 
+               "get_class_interfaces", 
+               "get_class_type_tree",
+               "get_method_callers", 
+               "get_method_overrides", 
+               "get_field_callers"
             ]
          }
       }
