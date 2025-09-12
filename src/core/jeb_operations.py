@@ -141,6 +141,7 @@ class JebOperations(object):
         
         action_xrefs_data = ActionXrefsData()
         action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, method.getItemId(), None)
+        ret = []
         if dex_unit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
                 ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
