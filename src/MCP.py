@@ -146,7 +146,7 @@ class MCPHTTPServer(BaseHTTPServer.HTTPServer):
 class Server(object):
     """MCP HTTP server manager"""
     
-    HOST = "localhost"
+    HOST = "127.0.0.1"
     PORT = 16161
 
     def __init__(self, rpc_handler):
@@ -154,6 +154,8 @@ class Server(object):
         self.server_thread = None
         self.running = False
         self.rpc_handler = rpc_handler
+        if not self.rpc_handler:
+            raise ValueError("RPC handler must be provided")
 
     def start(self):
         """Start the HTTP server"""
@@ -217,15 +219,20 @@ class MCPServer:
         global CTX
         CTX = ctx
         
-        # Initialize modular components
-        self.project_manager = ProjectManager(ctx)
-        self.jeb_operations = JebOperations(self.project_manager, ctx)
-        self.rpc_handler = JSONRPCHandler(self.jeb_operations)
-        
-        # Start HTTP server
-        self.server = Server(self.rpc_handler)
-        self.server.start()
-        print("[MCP] Plugin running with modular architecture")
+        try:
+            # Initialize modular components
+            self.project_manager = ProjectManager(ctx)
+            self.jeb_operations = JebOperations(self.project_manager, ctx)
+            self.rpc_handler = JSONRPCHandler(self.jeb_operations)
+
+            # Start HTTP server
+            self.server = Server(self.rpc_handler)
+            self.server.start()
+            print("[MCP] Plugin running with modular architecture")
+        except Exception as e:
+            print("[MCP] Error initializing plugin: %s" % str(e))
+            traceback.print_exc()
+            return
 
     def term(self):
         """Cleanup when plugin is terminated"""
@@ -260,20 +267,40 @@ class MCP(IScript):
         self.mcpServer = MCPServer()
 
     def run(self, ctx):
-        if not isinstance(ctx, IGraphicalClientContext):
-            print(u"[MCP] 必须在图形客户端运行")
-            return
+        # 检测是否为图形客户端环境
+        is_graphical = isinstance(ctx, IGraphicalClientContext)
         
-        
-        class WindowCloseListener(WindowAdapter):
-            def __init__(self, mcpServer):
-                self.mcp_server = mcpServer
+        if is_graphical:
+            # 图形环境：创建UI窗口
+            print(u"[MCP] 在图形客户端环境中运行")
+            
+            class WindowCloseListener(WindowAdapter):
+                def __init__(self, mcpServer):
+                    self.mcp_server = mcpServer
 
-            def windowClosed(self, event):
-                self.mcp_server.term()
-                print(u"[MCP] 窗口已关闭，停止 JEBMCP 服务")
+                def windowClosed(self, event):
+                    self.mcp_server.term()
+                    print(u"[MCP] 窗口已关闭，停止 JEBMCP 服务")
 
-        t = Thread(UIThread(WindowCloseListener(self.mcpServer)))
-        t.start()
-
+            t = Thread(UIThread(WindowCloseListener(self.mcpServer)))
+            t.start()
+        else:
+            # 非图形环境（如Linux命令行）：使用后台模式
+            print(u"[MCP] 在命令行环境中运行，使用后台模式")
+            print(u"[MCP] 服务将持续运行，使用 Ctrl+C 停止")
+            
+        # 启动MCP服务器
         self.mcpServer.run(ctx)
+        
+        if not is_graphical:
+            print(u"[MCP] 服务已启动，按 Ctrl+C 退出")
+            try:
+                # 在非图形环境下保持主线程运行
+                while True:
+                    Thread.sleep(5000)
+            except KeyboardInterrupt:
+                print(u"[MCP] 接收到中断信号，正在退出...")
+                self.mcpServer.term()
+            except Exception as e:
+                print(u"[MCP] 运行时异常: %s" % str(e))
+                self.mcpServer.term()

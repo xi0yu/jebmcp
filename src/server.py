@@ -62,6 +62,64 @@ def _jeb_call(method, *params):
 # -----------------------------
 #       MCP 工具定义
 # -----------------------------
+
+@mcp.tool()
+def load_project(file_path):
+    """Open a new APK/DEX project in JEB from the specified file path.
+    
+    This function will:
+    1. Open the specified APK/DEX file as a new project in JEB
+    2. Update the project manager context to work with the new project
+    3. Return project information including file path, project name, and available units
+    
+    Args:
+    - file_path (str): Absolute path to the APK/DEX file to open
+        
+    Returns:
+    - dict: Contains success status, project information, and any error messages
+    """
+    try:
+        result = _jeb_call('load_project', file_path)
+        print(result)
+        return result
+    except Exception as e:
+        print(f"Error loading project: {e}")
+        return {"success": False, "error": str(e)}
+
+@mcp.tool()
+def has_projects():
+    """Check if there are any projects loaded in JEB.
+
+    Returns:
+    - dict: Contains success status and a boolean indicating if projects exist
+    """
+    return _jeb_call('has_projects')
+
+@mcp.tool()
+def get_projects():
+    """Get a list of all loaded projects in JEB.
+
+    Returns:
+    - dict: Contains success status and a list of project details
+    """
+    return _jeb_call('get_projects')
+
+# @mcp.tool()
+# def unload_projects():
+#     """Unload all loaded projects in JEB.
+# 
+#     注意：此功能已被注释，因为 unload_projects 操作需要在 JEB 的 UI 线程中执行。
+#     由于 SWT 线程模型的限制，项目卸载涉及 UI 组件的清理和状态更新，
+#     否则会抛出 SWTException: Invalid thread access。
+#     
+#     如需卸载项目，请在 JEB 界面中手动操作，或者重启 JEB 应用程序。
+# 
+#     Returns:
+#     - dict: Contains success status and a list of unloaded project details
+#     """
+#     return _jeb_call('unload_projects')
+
+
 @mcp.tool()
 def get_current_project_info():
     """Retrieve detailed information about the current JEB session and loaded projects.
@@ -135,11 +193,13 @@ def get_class_decompiled_code(class_signature):
     return _jeb_call('get_class_decompiled_code', class_signature)
 
 @mcp.tool()
-def get_method_callers(method_signature):
+def get_method_callers(class_name: str, method_name: str):
+    """Get the callers/references of the given method in the currently loaded APK project
+    @param class_name: class name in either Dalvik JNI signature (e.g. Lcom/example/Foo;) 
+                       or normal Java style (e.g. com.example.Foo)
+    @param method_name: the method name (e.g. bar)
     """
-    Get the callers of the given method in the currently loaded APK project
-    """
-    return _jeb_call('get_method_callers', method_signature)
+    return _jeb_call('get_method_callers', class_name, method_name)
 
 @mcp.tool()
 def get_method_overrides(method_signature):
