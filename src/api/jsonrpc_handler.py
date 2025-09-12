@@ -31,6 +31,10 @@ class JSONRPCHandler(object):
             "parse_protobuf_class": jeb_operations.parse_protobuf_class,
             "get_class_methods": jeb_operations.get_class_methods,
             "get_class_fields": jeb_operations.get_class_fields,
+            "load_project": jeb_operations.load_project,
+            "has_projects": jeb_operations.has_projects,
+            "get_projects": jeb_operations.get_projects,
+            "unload_projects": jeb_operations.unload_projects,
         }
 
 

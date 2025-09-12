@@ -12,7 +12,7 @@ from com.pnfsoftware.jeb.core.actions import ActionXrefsData, Actions, ActionCon
 # Import signature utilities using absolute path for JEB compatibility
 import sys
 import os
-
+from java.io import File
 # Add the src directory to Python path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.dirname(current_dir)
@@ -27,7 +27,7 @@ class JebOperations(object):
     def __init__(self, project_manager, ctx=None):
         self.project_manager = project_manager
         self.ctx = ctx
-    
+
     def get_app_manifest(self):
         """Get the manifest of the currently loaded APK project in JEB"""
         project = self.project_manager.get_current_project()
@@ -121,10 +121,10 @@ class JebOperations(object):
         text = decomp.getDecompiledClassText(clazz.getSignature(True))
         return {"success": True, "decompiled_code": text, "class_signature": clazz.getSignature(True)}
     
-    def get_method_callers(self, method_signature):
+    def get_method_callers(self, class_name, method_name):
         """Get the callers of the given method in the currently loaded APK project"""
-        if not method_signature:
-            return {"success": False, "error": "Method signature is required"}
+        if not class_name or not method_name:
+            return {"success": False, "error": "Both class name and method name are required"}
 
         project = self.project_manager.get_current_project()
         if project is None:
@@ -133,18 +133,18 @@ class JebOperations(object):
         dex_unit = self.project_manager.find_dex_unit(project)
         if dex_unit is None:
             return {"success": False, "error": "No dex unit found in the current project"}
-        
-        ret = []
-        method = dex_unit.getMethod(method_signature)
+
+        # Find method
+        method = self._find_method(dex_unit, class_name, method_name)
         if method is None:
-            return {"success": False, "error": "Method not found: %s" % method_signature}
+            return {"success": False, "error": "Method not found: %s" % method_name}
         
         action_xrefs_data = ActionXrefsData()
         action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, method.getItemId(), None)
         if dex_unit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
                 ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
-        return {"success": True, "method_signature": method_signature, "callers": ret}
+        return {"success": True, "method_signature": method.getSignature(True), "callers": ret}
     
     def get_field_callers(self, class_name, field_name):
         """Get the callers/references of the given field in the currently loaded APK project"""
@@ -488,19 +488,11 @@ class JebOperations(object):
         try:
             # Check MCP to JEB connection
             connection_status = "connected"
-            try:
-                # Try a simple ping to verify connection
-                project = self.project_manager.get_current_project()
-                if project is None:
-                    connection_status = "disconnected"
-            except Exception:
-                connection_status = "disconnected"
-            
-            # Get project info
-            project_info = ""
-            if connection_status == "connected":
+            project_info = "No project currently loaded in JEB"
+            project = self.project_manager.get_current_project()
+            if project is not None:
                 try:
-                    project_info = self._get_project_details(project)
+                    project_info = self.project_manager.get_project_details(project)
                 except Exception as e:
                     print("Error getting project: %s" % str(e))
             
@@ -522,62 +514,10 @@ class JebOperations(object):
                     "status": "error",
                     "message": "Failed to check status: %s" % str(e)
                 },
-                "project": None,
+                "project_info": None,
                 "jeb_version": None
             }
     
-    def _get_project_details(self, project):
-        try:
-            dex_class_count = 0
-            dex_method_count = 0
-            dex_field_count = 0
-
-            for dex_unit in project.findUnits(IDexUnit):
-                dex_class_count += len(dex_unit.getClasses())
-                dex_method_count += len(dex_unit.getMethods())
-                dex_field_count += len(dex_unit.getFields())
-
-            package_name = "Unknown"
-            application_entry_class_name = "Unknown"
-            manifest_component_count = [
-                ("activities", 0),
-                ("services", 0),
-                ("receivers", 0),
-                ("providers", 0)
-            ]
-
-            for apk_unit in project.findUnits(IApkUnit):
-                if not apk_unit.hasApplication():
-                    continue
-                package_name = apk_unit.getPackageName() or "Unknown"
-                application_entry_class_name = apk_unit.getApplicationName() or "Unknown"
-                manifest_component_count = [
-                    ("activities", len(apk_unit.getActivities())),
-                    ("services", len(apk_unit.getServices())),
-                    ("receivers", len(apk_unit.getReceivers())),
-                    ("providers", len(apk_unit.getProviders()))
-                ]
-                break
-
-            return {
-                "package_name": package_name,
-                "application_entry_class_name": application_entry_class_name,
-                "dex_class_count": dex_class_count,
-                "dex_method_count": dex_method_count,
-                "dex_field_count": dex_field_count,
-                "manifest_component_count": manifest_component_count
-            }
-
-        except Exception as e:
-            print("Error getting project details: %s" % str(e))
-            return {
-                "package_name": "Error",
-                "application_entry_class_name": "Error",
-                "dex_class_count": 0,
-                "dex_method_count": 0,
-                "dex_field_count": 0,
-                "manifest_component_count": []
-            }
 
     def get_class_superclass(self, class_signature):
         """Get the superclass of a given class
@@ -766,6 +706,30 @@ class JebOperations(object):
             
         except Exception as e:
             return {"success": False, "error": "Failed to get class fields: %s" % str(e)}
+
+    def load_project(self, file_path):
+        """Open a new project from file path
+        
+        Args:
+            file_path (str): Path to the APK/DEX file to open
+            
+        Returns:
+            dict: Success status and project information
+        """
+        return self.project_manager.load_project(file_path)
+    
+    
+    def has_projects(self):
+        """Check if there are any projects loaded in JEB"""
+        return self.project_manager.has_projects()
+    
+    def get_projects(self):
+        """Get information about all loaded projects in JEB"""
+        return self.project_manager.get_projects()
+    
+    def unload_projects(self):
+        """Unload all projects from JEB"""
+        return self.project_manager.unload_projects()
 
 class GenericFlagParser:
     """解析 ICodeItem.getGenericFlags() 返回值，将其转换为可读标志列表"""
