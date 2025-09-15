@@ -329,6 +329,147 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, class_name, str(e))}
     
+    def batch_rename(self, rename_operations):
+        """
+        Batch rename classes, methods, and fields based on provided operations
+        
+        Args:
+            rename_operations: List of rename operation dictionaries with structure:
+            [
+                {
+                    "type": "class",
+                    "class_name": "com.example.MyClass",
+                    "old_name": "",
+                    "new_name": "NewClassName"
+                },
+                {
+                    "type": "method",
+                    "class_name": "com.example.MyClass",
+                    "old_name": "oldMethodName",
+                    "new_name": "newMethodName"
+                },
+                {
+                    "type": "field",
+                    "class_name": "com.example.MyClass",
+                    "old_name": "oldFieldName",
+                    "new_name": "newFieldName"
+                }
+            ]
+        
+        Returns:
+            {
+                "success": bool,
+                "summary": {
+                    "total": int,
+                    "successful": int,
+                    "failed": int
+                },
+                "failed_operations": [
+                    {
+                        "type": "class|method|field",
+                        "class_name": "com.example.MyClass",
+                        "old_name": "oldName",
+                        "new_name": "newName",
+                        "success": false,
+                        "error": "error message"
+                    },
+                    ...
+                ],
+                "message": "批量重命名完成信息"
+            }
+        """
+        if not rename_operations or not isinstance(rename_operations, list):
+            return {"success": False, "error": "rename_operations must be a non-empty list"}
+        
+        successful_count = 0
+        failed_count = 0
+        failed_operations = []
+        
+        for operation in rename_operations:
+            try:
+                # Validate operation structure
+                if not isinstance(operation, dict):
+                    failed_operations.append({
+                        "type": "unknown",
+                        "success": False,
+                        "error": "Operation must be a dictionary"
+                    })
+                    failed_count += 1
+                    continue
+                
+                op_type = operation.get("type")
+                class_name = operation.get("class_name")
+                old_name = operation.get("old_name")
+                new_name = operation.get("new_name")
+                
+                # Basic validation - class operations don't need old_name
+                if op_type == "class":
+                    required_fields = [op_type, class_name, new_name]
+                    missing_fields = "type, class_name, new_name"
+                else:
+                    required_fields = [op_type, class_name, old_name, new_name]
+                    missing_fields = "type, class_name, old_name, new_name"
+                
+                if not all(required_fields):
+                    failed_operations.append({
+                        "type": op_type or "unknown",
+                        "class_name": class_name,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                        "success": False,
+                        "error": "Missing required fields: %s" % missing_fields
+                    })
+                    failed_count += 1
+                    continue
+                
+                # Execute rename operation based on type
+                if op_type == "class":
+                    rename_result = self.rename_class_name(class_name, new_name)
+                elif op_type == "method":
+                    rename_result = self.rename_method_name(class_name, old_name, new_name)
+                elif op_type == "field":
+                    rename_result = self.rename_field_name(class_name, old_name, new_name)
+                else:
+                    rename_result = {"success": False, "error": "Unknown operation type: %s" % op_type}
+                
+                # Check result and update counters
+                if rename_result.get("success", False):
+                    successful_count += 1
+                else:
+                    failed_operations.append({
+                        "type": op_type,
+                        "class_name": class_name,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                        "success": False,
+                        "error": rename_result.get("error", "Unknown error")
+                    })
+                    failed_count += 1
+                
+            except Exception as e:
+                failed_operations.append({
+                    "type": operation.get("type", "unknown"),
+                    "class_name": operation.get("class_name"),
+                    "old_name": operation.get("old_name"),
+                    "new_name": operation.get("new_name"),
+                    "success": False,
+                    "error": "Exception during rename: %s" % str(e)
+                })
+                failed_count += 1
+        
+        return {
+            "success": failed_count == 0,
+            "summary": {
+                "total": len(rename_operations),
+                "successful": successful_count,
+                "failed": failed_count
+            },
+            "failed_operations": failed_operations,
+            "message": "批量重命名完成: 总共 %d 个操作，成功 %d 个，失败 %d 个" % (len(rename_operations), successful_count, failed_count)
+        }
+    
+
+     
     def get_method_smali(self, class_signature, method_name):
         """Get all Smali instructions for a specific method in the given class"""
         if not class_signature or not method_name:

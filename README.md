@@ -90,7 +90,8 @@ JEBMCP 主要特性：
                "get_class_type_tree",
                "get_method_callers", 
                "get_method_overrides", 
-               "get_field_callers"
+               "get_field_callers",
+               "batch_rename"
             ]
          }
       }
@@ -115,6 +116,88 @@ JEBMCP 主要特性：
 ### MCP.py
 - **用途**：通过 JEB 客户端脚本运行，调用 MCP 功能  
 - **注意**：不支持直接命令行执行，需在 JEB 内部使用  
+
+---
+
+## 🔄 批量重命名工具
+
+新增的 `batch_rename` 工具支持批量重命名类、方法和字段。
+
+### 数据结构
+
+```json
+[
+    {
+        "type": "class",
+        "class_name": "com.example.OldClass",
+        "old_name": "OldClass",
+        "new_name": "NewClass"
+    },
+    {
+        "type": "method",
+        "class_name": "com.example.MyClass",
+        "old_name": "oldMethod",
+        "new_name": "newMethod"
+    },
+    {
+        "type": "field",
+        "class_name": "com.example.MyClass",
+        "old_name": "oldField",
+        "new_name": "newField"
+    }
+]
+```
+
+### 字段说明
+
+- `type`: 操作类型，可选值为 "class"、"method"、"field"
+- `class_name`: 目标类名
+- `old_name`: 原始名称
+- `new_name`: 新名称
+
+### 返回结果
+
+```json
+{
+    "success": true,
+    "results": [
+        {
+            "type": "method",
+            "class_name": "com.example.MyClass",
+            "old_name": "oldMethod",
+            "new_name": "newMethod",
+            "success": true
+        }
+    ],
+    "summary": {
+        "total": 1,
+        "success": 1,
+        "failed": 0
+    }
+}
+```
+
+### 使用示例
+
+```python
+# 批量重命名示例
+rename_ops = [
+    {
+        "type": "class",
+        "class_name": "com.example.TestClass",
+        "old_name": "TestClass",
+        "new_name": "RenamedTestClass"
+    },
+    {
+        "type": "method",
+        "class_name": "com.example.TestClass",
+        "old_name": "testMethod",
+        "new_name": "renamedTestMethod"
+    }
+]
+
+result = client.call("batch_rename", rename_ops)
+```
 
 ---
 
