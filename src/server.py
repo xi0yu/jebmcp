@@ -354,6 +354,55 @@ def get_class_fields(class_signature):
     """
     return _jeb_call('get_class_fields', class_signature)
 
+@mcp.tool()
+def batch_rename(rename_operations):
+    """批量重命名类、方法和字段的工具。
+    
+    输入格式为操作列表，每个操作包含以下字段：
+    - type: 操作类型，必须是 "class"、"method" 或 "field"
+    - class_name: 目标类名（支持JNI格式如 Lcom/example/MyClass; 或Java格式如 com.example.MyClass）
+    - old_name: 当前名称
+    - new_name: 新名称
+    
+    使用示例：
+    [
+        {
+            "type": "class",
+            "class_name": "com.example.TestClass",
+            "old_name": "",
+            "new_name": "RenamedTestClass"
+        },
+        {
+            "type": "method",
+            "class_name": "com.example.TestClass",
+            "old_name": "testMethod",
+            "new_name": "renamedTestMethod"
+        },
+        {
+            "type": "field",
+            "class_name": "com.example.TestClass",
+            "old_name": "testField",
+            "new_name": "renamedTestField"
+        }
+    ]
+    
+    返回结果包含详细的操作信息：
+    {
+        "success": bool,  // 是否全部操作成功
+        "results": [...],  // 每个操作的详细结果
+        "summary": {
+            "total": int,      // 总操作数
+            "successful": int, // 成功操作数
+            "failed": int      // 失败操作数
+        },
+        "failed_operations": [...],  // 失败操作的详细列表
+        "message": "批量重命名完成: 总共 X 个操作，成功 Y 个，失败 Z 个"
+    }
+    
+    @param rename_operations: 重命名操作列表
+    """
+    return _jeb_call('batch_rename', rename_operations)
+
 
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）
 @mcp.custom_route("/health", methods=["GET"])
