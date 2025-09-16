@@ -823,7 +823,7 @@ class JebOperations(object):
                 field_info = {
                     "name": field.getName(),
                     "signature": field.getSignature(True),
-                    "type": field.getType().getSignature(True) if field.getType() else "unknown",
+                    "type": field.getFieldType().getSignature(True) if field.getFieldType() else "unknown",
                     "access_flags": GenericFlagParser.parse_flags(field.getGenericFlags())
                 }
                 
