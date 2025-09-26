@@ -220,7 +220,7 @@ def get_field_callers(class_name: str, field_name: str):
     return _jeb_call('get_field_callers', class_name, field_name)
 
 @mcp.tool()
-def rename_class_name(class_name: str, new_name=None):
+def rename_class_name(class_name: str, new_name: str):
     """Rename a class in the current APK project.
 
     This function requires a new_name to perform renaming. 
@@ -234,7 +234,7 @@ def rename_class_name(class_name: str, new_name=None):
     return _jeb_call('rename_class_name', class_name, new_name)
 
 @mcp.tool()
-def rename_method_name(class_name: str, method_name: str, new_name: str=None):
+def rename_method_name(class_name: str, method_name: str, new_name: str):
     """Rename a method in the specified class of the current APK project.
 
     This function requires a new_name to perform renaming. 
@@ -249,7 +249,7 @@ def rename_method_name(class_name: str, method_name: str, new_name: str=None):
     return _jeb_call('rename_method_name', class_name, method_name, new_name)
 
 @mcp.tool()
-def rename_field_name(class_name: str, field_name: str, new_name: str=None):
+def rename_field_name(class_name: str, field_name: str, new_name: str):
     """Rename a field in the specified class of the current APK project.
 
     This function requires a new_name to perform renaming. 
