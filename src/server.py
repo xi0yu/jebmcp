@@ -64,7 +64,7 @@ def _jeb_call(method, *params):
 # -----------------------------
 
 @mcp.tool()
-def load_project(file_path):
+def load_project(file_path: str):
     """Open a new APK/DEX project in JEB from the specified file path.
     
     This function will:
@@ -137,7 +137,7 @@ def get_current_project_info():
     return _jeb_call('get_current_project_info')
 
 @mcp.tool()
-def get_method_smali(class_signature, method_name):
+def get_method_smali(class_signature: str, method_name: str):
     """Get all Smali instructions for a specific method in the given class
 
     Supports multiple class signature formats:
@@ -166,7 +166,7 @@ def get_app_manifest():
     return _jeb_call('get_app_manifest')
 
 @mcp.tool()
-def get_method_decompiled_code(class_name, method_name):
+def get_method_decompiled_code(class_name: str, method_name: str):
     """Get the decompiled code of the given method in the currently loaded APK project
     
     Supports multiple class name formats:
@@ -180,7 +180,7 @@ def get_method_decompiled_code(class_name, method_name):
     return _jeb_call('get_method_decompiled_code', class_name, method_name)
 
 @mcp.tool()
-def get_class_decompiled_code(class_signature):
+def get_class_decompiled_code(class_signature: str):
     """Get the decompiled code of a class in the current APK project.
 
     Input formats supported (auto-normalized to JNI signature):
@@ -202,7 +202,7 @@ def get_method_callers(class_name: str, method_name: str):
     return _jeb_call('get_method_callers', class_name, method_name)
 
 @mcp.tool()
-def get_method_overrides(method_signature):
+def get_method_overrides(method_signature: str):
     """Get the overrides of the given method in the currently loaded APK project
 
     @param method_signature: the fully-qualified method signature to find overrides for, e.g. Lcom/example/Foo;->bar(I[JLjava/Lang/String;)V
@@ -220,7 +220,7 @@ def get_field_callers(class_name: str, field_name: str):
     return _jeb_call('get_field_callers', class_name, field_name)
 
 @mcp.tool()
-def rename_class_name(class_name, new_name=None):
+def rename_class_name(class_name: str, new_name=None):
     """Rename a class in the current APK project.
 
     This function requires a new_name to perform renaming. 
@@ -234,7 +234,7 @@ def rename_class_name(class_name, new_name=None):
     return _jeb_call('rename_class_name', class_name, new_name)
 
 @mcp.tool()
-def rename_method_name(class_name, method_name, new_name=None):
+def rename_method_name(class_name: str, method_name: str, new_name: str=None):
     """Rename a method in the specified class of the current APK project.
 
     This function requires a new_name to perform renaming. 
@@ -249,7 +249,7 @@ def rename_method_name(class_name, method_name, new_name=None):
     return _jeb_call('rename_method_name', class_name, method_name, new_name)
 
 @mcp.tool()
-def rename_field_name(class_name, field_name, new_name):
+def rename_field_name(class_name: str, field_name: str, new_name: str=None):
     """Rename a field in the specified class of the current APK project.
 
     This function requires a new_name to perform renaming. 
@@ -264,7 +264,7 @@ def rename_field_name(class_name, field_name, new_name):
     return _jeb_call('rename_field_name', class_name, field_name, new_name)
 
 @mcp.tool()
-def get_class_type_tree(class_signature, max_node_count=16):
+def get_class_type_tree(class_signature: str, max_node_count: int=16):
     """Build a hierarchical type tree for a class showing inheritance relationships.
 
     This function analyzes a class and builds a tree structure showing:
@@ -282,7 +282,7 @@ def get_class_type_tree(class_signature, max_node_count=16):
     return _jeb_call('get_class_type_tree', class_signature, max_node_count)
 
 @mcp.tool()
-def get_class_superclass(class_signature):
+def get_class_superclass(class_signature: str):
     """Get the superclass of a given class.
 
     This function analyzes a class and returns information about its direct superclass.
@@ -296,7 +296,7 @@ def get_class_superclass(class_signature):
     return _jeb_call('get_class_superclass', class_signature)
 
 @mcp.tool()
-def get_class_interfaces(class_signature):
+def get_class_interfaces(class_signature: str):
     """Get all interfaces implemented by a given class.
 
     This function analyzes a class and returns a list of all interfaces it implements,
@@ -310,7 +310,7 @@ def get_class_interfaces(class_signature):
     return _jeb_call('get_class_interfaces', class_signature)
 
 @mcp.tool()
-def parse_protobuf_class(class_signature):
+def parse_protobuf_class(class_signature: str):
     """Parse protobuf definition for a specific class.
 
     Supports multiple class signature formats:
@@ -323,7 +323,7 @@ def parse_protobuf_class(class_signature):
     return make_jsonrpc_request('parse_protobuf_class', class_signature)
 
 @mcp.tool()
-def get_class_methods(class_signature):
+def get_class_methods(class_signature: str):
     """Get all methods of a given class.
 
     This function analyzes a class and returns detailed information about all its methods,
@@ -339,7 +339,7 @@ def get_class_methods(class_signature):
     return _jeb_call('get_class_methods', class_signature)
 
 @mcp.tool()
-def get_class_fields(class_signature):
+def get_class_fields(class_signature: str):
     """Get all fields of a given class.
 
     This function analyzes a class and returns detailed information about all its fields,
@@ -355,7 +355,7 @@ def get_class_fields(class_signature):
     return _jeb_call('get_class_fields', class_signature)
 
 @mcp.tool()
-def batch_rename(rename_operations):
+def batch_rename(rename_operations: list):
     """批量重命名类、方法和字段的工具。
     
     输入格式为操作列表，每个操作包含以下字段：
