@@ -10,7 +10,7 @@ import http.client
 from fastmcp import FastMCP
 
 # The log_level is necessary for Cline to work: https://github.com/jlowin/fastmcp/issues/81
-mcp = FastMCP("github.com/flankerhqd/jeb-pro-mcp", log_level="ERROR")
+mcp = FastMCP("github.com/flankerhqd/jeb-pro-mcp")
 
 jsonrpc_request_id = 1
 
@@ -354,54 +354,44 @@ def get_class_fields(class_signature: str):
     """
     return _jeb_call('get_class_fields', class_signature)
 
-@mcp.tool()
-def batch_rename(rename_operations: list):
-    """批量重命名类、方法和字段的工具。
-    
-    输入格式为操作列表，每个操作包含以下字段：
-    - type: 操作类型，必须是 "class"、"method" 或 "field"
-    - class_name: 目标类名（支持JNI格式如 Lcom/example/MyClass; 或Java格式如 com.example.MyClass）
-    - old_name: 当前名称
-    - new_name: 新名称
-    
-    使用示例：
-    [
-        {
-            "type": "class",
-            "class_name": "com.example.TestClass",
-            "old_name": "",
-            "new_name": "RenamedTestClass"
-        },
-        {
-            "type": "method",
-            "class_name": "com.example.TestClass",
-            "old_name": "testMethod",
-            "new_name": "renamedTestMethod"
-        },
-        {
-            "type": "field",
-            "class_name": "com.example.TestClass",
-            "old_name": "testField",
-            "new_name": "renamedTestField"
-        }
-    ]
-    
-    返回结果包含详细的操作信息：
-    {
-        "success": bool,  // 是否全部操作成功
-        "results": [...],  // 每个操作的详细结果
-        "summary": {
-            "total": int,      // 总操作数
-            "successful": int, // 成功操作数
-            "failed": int      // 失败操作数
-        },
-        "failed_operations": [...],  // 失败操作的详细列表
-        "message": "批量重命名完成: 总共 X 个操作，成功 Y 个，失败 Z 个"
-    }
-    
-    @param rename_operations: 重命名操作列表
+@mcp.tool(name="rename_batch_symbols", description="批量重命名类/字段/方法")
+def rename_batch_symbols(rename_operations: str):
     """
-    return _jeb_call('batch_rename', rename_operations)
+    批量重命名类、方法和字段（JSON 输入格式说明）
+
+    参数：
+        rename_operations (str): ⚠️ 必须是 JSON 数组格式字符串，每个元素代表一次重命名操作。
+    
+    JSON 元素字段：
+        - type (str): 重命名类型，可选值：
+            "class"  → 表示重命名类
+            "method" → 表示重命名方法
+            "field"  → 表示重命名字段
+        - old_name (str): 旧名称，完整路径
+            - class: "com.example.TestClass" 或 "wzp"
+            - method: "com.example.TestClass.methodName" 或 "wzp.a"
+            - field: "com.example.TestClass.fieldName" 或 "wzp.a"
+        - new_name (str): 新名称，支持两种格式
+            - 符号名: "getName", "moduleName"
+            - 完整路径: "wzp.getName" (系统会自动提取符号名称)
+    
+    示例输入：
+    [
+        {"type": "class", "old_name": "com.example.TestClass", "new_name": "RenamedTestClass"},
+        {"type": "method", "old_name": "com.example.TestClass.testMethod", "new_name": "renamedTestMethod"},
+        {"type": "field", "old_name": "com.example.TestClass.testField", "new_name": "renamedTestField"}
+    ]
+
+    注意事项：
+    1. JSON 必须是数组，不能是单个对象。
+    2. 所有操作必须在同一个数组里提供。
+    3. new_name 可以是符号名或完整路径，系统会自动提取符号名。
+    4. 如果格式错误或字段缺失，操作会停止并返回失败信息。
+
+    返回：
+        dict: 包含操作结果，包括成功标志、操作统计、失败操作列表和消息。
+    """
+    return _jeb_call('rename_batch_symbols', rename_operations)
 
 
 # 可选：为 HTTP/健康检查提供一个简单路由（仅在 transport=http 时可见）

@@ -10,9 +10,11 @@
 1. [简介](#简介)  
 2. [客户端兼容性](#客户端兼容性)  
 3. [安装](#安装)  
-4. [项目结构](#项目结构)  
-5. [许可证](#许可证)  
-6. [更多资源](#更多资源)
+4. [使用方法](#使用方法)  
+5. [项目结构](#项目结构)  
+6. [批量重命名工具](#批量重命名工具)  
+7. [许可证](#许可证)  
+8. [更多资源](#更多资源)
 
 ---
 
@@ -64,6 +66,23 @@ JEBMCP 主要特性：
 
 ## 使用方法
 
+### 方式一：使用 NPM 包（推荐）
+
+**JEBMCP** 已发布到 NPM 官网，可以直接使用 `npx` 执行，无需下载本地 `server.py`：
+
+```json
+{
+   "mcpServers": {
+      "jeb": {
+         "command": "npx",
+         "args": ["-y", "@xi0yu/jebmcp-proxy"]
+      }
+   }
+}
+```
+
+### 方式二：本地运行
+
 1. 配置 MCP 服务
    - **Claude / Cursor / Trae** 在 AI 配置中配置 mcpServers 
    ```json
@@ -91,7 +110,7 @@ JEBMCP 主要特性：
                "get_method_callers", 
                "get_method_overrides", 
                "get_field_callers",
-               "batch_rename"
+               "rename_batch_symbols"
             ]
          }
       }
@@ -100,10 +119,12 @@ JEBMCP 主要特性：
 
    - **Claude 参考** [自定义 mcp 配置教程](https://docs.anthropic.com/zh-CN/docs/claude-code/mcp)
 
-2. 在 JEB 中配置 MCP 服务
+2. 在 JEB 中配置 MCP 服务（两种方式都需要）
    - 打开 JEB 客户端
    - 导航到 `工具` -> `脚本`
    - 加载 `MCP.py` 脚本
+
+**注意**：无论使用哪种方式，都需要下载本项目中的 `MCP.py` 等文件到本地，供 JEB 执行。NPM 包只是替代了 `server.py` 的运行方式。
 
 ---
 
@@ -121,7 +142,7 @@ JEBMCP 主要特性：
 
 ## 🔄 批量重命名工具
 
-新增的 `batch_rename` 工具支持批量重命名类、方法和字段。
+新增的 `rename_batch_symbols` 工具支持批量重命名类、方法和字段。
 
 ### 数据结构
 
@@ -129,21 +150,18 @@ JEBMCP 主要特性：
 [
     {
         "type": "class",
-        "class_name": "com.example.OldClass",
-        "old_name": "OldClass",
-        "new_name": "NewClass"
+        "old_name": "wzp",
+        "new_name": "ModuleInfoParser"
     },
     {
         "type": "method",
-        "class_name": "com.example.MyClass",
-        "old_name": "oldMethod",
-        "new_name": "newMethod"
+        "old_name": "wzp.a",
+        "new_name": "getName"
     },
     {
         "type": "field",
-        "class_name": "com.example.MyClass",
-        "old_name": "oldField",
-        "new_name": "newField"
+        "old_name": "wzp.a",
+        "new_name": "moduleName"
     }
 ]
 ```
@@ -151,29 +169,26 @@ JEBMCP 主要特性：
 ### 字段说明
 
 - `type`: 操作类型，可选值为 "class"、"method"、"field"
-- `class_name`: 目标类名
-- `old_name`: 原始名称
-- `new_name`: 新名称
+- `old_name`: 原始名称（完整路径）
+  - class: "com.example.TestClass" 或 "wzp"
+  - method: "com.example.TestClass.methodName" 或 "wzp.a"
+  - field: "com.example.TestClass.fieldName" 或 "wzp.a"
+- `new_name`: 新名称，支持两种格式：
+  - 仅符号名称：如 "getName"、"moduleName"
+  - 完整路径：如 "wzp.getName"、"wzp.moduleName"（系统会自动提取符号名称）
 
 ### 返回结果
 
 ```json
 {
     "success": true,
-    "results": [
-        {
-            "type": "method",
-            "class_name": "com.example.MyClass",
-            "old_name": "oldMethod",
-            "new_name": "newMethod",
-            "success": true
-        }
-    ],
     "summary": {
-        "total": 1,
-        "success": 1,
+        "total": 3,
+        "successful": 3,
         "failed": 0
-    }
+    },
+    "failed_operations": [],
+    "message": "批量重命名完成: 总共 3 个操作，成功 3 个，失败 0 个"
 }
 ```
 
@@ -184,19 +199,17 @@ JEBMCP 主要特性：
 rename_ops = [
     {
         "type": "class",
-        "class_name": "com.example.TestClass",
-        "old_name": "TestClass",
-        "new_name": "RenamedTestClass"
+        "old_name": "wzp",
+        "new_name": "ModuleInfoParser"
     },
     {
         "type": "method",
-        "class_name": "com.example.TestClass",
-        "old_name": "testMethod",
-        "new_name": "renamedTestMethod"
+        "old_name": "wzp.a",
+        "new_name": "getName"
     }
 ]
 
-result = client.call("batch_rename", rename_ops)
+result = client.call("rename_batch_symbols", rename_ops)
 ```
 
 ---
