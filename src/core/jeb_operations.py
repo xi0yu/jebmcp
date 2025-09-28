@@ -3,6 +3,7 @@
 JEB operations module - handles all business logic for APK/DEX operations
 """
 import hashlib
+import json
 from com.pnfsoftware.jeb.core.units.code import ICodeItem
 from com.pnfsoftware.jeb.core.units.code.android import IApkUnit, IDexUnit
 from com.pnfsoftware.jeb.core.util import DecompilerHelper
@@ -329,57 +330,56 @@ class JebOperations(object):
         except Exception as e:
             return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, class_name, str(e))}
     
-    def batch_rename(self, rename_operations):
+    def rename_batch_symbols(self, rename_operations):
         """
-        Batch rename classes, methods, and fields based on provided operations
-        
+        批量重命名类、方法和字段（支持 JSON 字符串或 Python 列表）。
+
         Args:
-            rename_operations: List of rename operation dictionaries with structure:
-            [
-                {
-                    "type": "class",
-                    "class_name": "com.example.MyClass",
-                    "old_name": "",
-                    "new_name": "NewClassName"
-                },
-                {
-                    "type": "method",
-                    "class_name": "com.example.MyClass",
-                    "old_name": "oldMethodName",
-                    "new_name": "newMethodName"
-                },
-                {
-                    "type": "field",
-                    "class_name": "com.example.MyClass",
-                    "old_name": "oldFieldName",
-                    "new_name": "newFieldName"
-                }
-            ]
-        
+            rename_operations (str 或 list):
+                JSON 数组字符串或直接列表，每个元素包含:
+                - type: "class" / "method" / "field"
+                - old_name: 旧名称（完整路径）
+                - new_name: 新名称，仅符号名（可为完整路径，函数会自动提取符号名）
+
+        示例：
+        [
+            {"type": "class", "old_name": "com.example.TestClass", "new_name": "RenamedTestClass"},
+            {"type": "method", "old_name": "com.example.TestClass.testMethod", "new_name": "renamedTestMethod"},
+            {"type": "field", "old_name": "com.example.TestClass.testField", "new_name": "renamedTestField"}
+        ]
+
         Returns:
-            {
-                "success": bool,
-                "summary": {
-                    "total": int,
-                    "successful": int,
-                    "failed": int
-                },
-                "failed_operations": [
-                    {
-                        "type": "class|method|field",
-                        "class_name": "com.example.MyClass",
-                        "old_name": "oldName",
-                        "new_name": "newName",
-                        "success": false,
-                        "error": "error message"
-                    },
-                    ...
-                ],
-                "message": "批量重命名完成信息"
-            }
+            dict: 包含操作结果，包括 success, summary, failed_operations, message
         """
+        # Handle JSON string input (support both str and unicode for Python 2/3 compatibility)
+        if isinstance(rename_operations, (str, unicode)):
+            try:
+                parsed_data = json.loads(rename_operations)
+                # Check if it's wrapped in an object with 'operations' key
+                if isinstance(parsed_data, dict) and 'rename_operations' in parsed_data:
+                    rename_operations = parsed_data['rename_operations']
+                else:
+                    rename_operations = parsed_data
+            except (ValueError, TypeError) as e:
+                return {
+                    "success": False, 
+                    "error": "Invalid JSON format in rename_operations: %s" % str(e),
+                    "summary": {"total": 0, "successful": 0, "failed": 0},
+                    "failed_operations": [],
+                    "message": "JSON 解析失败"
+                }
+        
         if not rename_operations or not isinstance(rename_operations, list):
-            return {"success": False, "error": "rename_operations must be a non-empty list"}
+            # Add debug information to help identify the issue
+            data_type = type(rename_operations).__name__
+            data_repr = str(rename_operations)[:200] if rename_operations else "None"
+            return {
+                "success": False, 
+                "error": "rename_operations must be a non-empty list or valid JSON string. Got type: %s, data: %s" % (data_type, data_repr),
+                "summary": {"total": 0, "successful": 0, "failed": 0},
+                "failed_operations": [],
+                "message": "参数格式错误"
+            }
         
         successful_count = 0
         failed_count = 0
@@ -398,39 +398,70 @@ class JebOperations(object):
                     continue
                 
                 op_type = operation.get("type")
-                class_name = operation.get("class_name")
                 old_name = operation.get("old_name")
                 new_name = operation.get("new_name")
                 
-                # Basic validation - class operations don't need old_name
-                if op_type == "class":
-                    required_fields = [op_type, class_name, new_name]
-                    missing_fields = "type, class_name, new_name"
-                else:
-                    required_fields = [op_type, class_name, old_name, new_name]
-                    missing_fields = "type, class_name, old_name, new_name"
-                
+                # Basic validation
+                required_fields = [op_type, old_name, new_name]
                 if not all(required_fields):
                     failed_operations.append({
                         "type": op_type or "unknown",
-                        "class_name": class_name,
                         "old_name": old_name,
                         "new_name": new_name,
                         "success": False,
-                        "error": "Missing required fields: %s" % missing_fields
+                        "error": "Missing required fields: type, old_name, new_name"
                     })
                     failed_count += 1
                     continue
                 
+                # Parse old_name to extract class_name and symbol_name
+                if op_type == "class":
+                    class_name = old_name
+                    symbol_name = ""
+                elif op_type in ["method", "field"]:
+                    # Split old_name to get class_name and symbol_name
+                    parts = old_name.rsplit(".", 1)
+                    if len(parts) != 2:
+                        failed_operations.append({
+                            "type": op_type,
+                            "old_name": old_name,
+                            "new_name": new_name,
+                            "success": False,
+                            "error": "Invalid old_name format for %s. Expected format: 'class.name.symbol'" % op_type
+                        })
+                        failed_count += 1
+                        continue
+                    class_name, symbol_name = parts
+                else:
+                    failed_operations.append({
+                        "type": op_type,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                        "success": False,
+                        "error": "Unknown operation type: %s" % op_type
+                    })
+                    failed_count += 1
+                    continue
+                
+                # Parse new_name to extract actual symbol name (support both simple name and full path)
+                actual_new_name = new_name
+                if op_type == "class":
+                    # For class, new_name can be full path or simple name
+                    actual_new_name = new_name
+                elif op_type in ["method", "field"]:
+                    # For method/field, if new_name contains dots, extract the last part as symbol name
+                    if "." in new_name:
+                        actual_new_name = new_name.rsplit(".", 1)[1]
+                    else:
+                        actual_new_name = new_name
+                
                 # Execute rename operation based on type
                 if op_type == "class":
-                    rename_result = self.rename_class_name(class_name, new_name)
+                    rename_result = self.rename_class_name(class_name, actual_new_name)
                 elif op_type == "method":
-                    rename_result = self.rename_method_name(class_name, old_name, new_name)
+                    rename_result = self.rename_method_name(class_name, symbol_name, actual_new_name)
                 elif op_type == "field":
-                    rename_result = self.rename_field_name(class_name, old_name, new_name)
-                else:
-                    rename_result = {"success": False, "error": "Unknown operation type: %s" % op_type}
+                    rename_result = self.rename_field_name(class_name, symbol_name, actual_new_name)
                 
                 # Check result and update counters
                 if rename_result.get("success", False):
@@ -438,7 +469,6 @@ class JebOperations(object):
                 else:
                     failed_operations.append({
                         "type": op_type,
-                        "class_name": class_name,
                         "old_name": old_name,
                         "new_name": new_name,
                         "success": False,
@@ -449,7 +479,6 @@ class JebOperations(object):
             except Exception as e:
                 failed_operations.append({
                     "type": operation.get("type", "unknown"),
-                    "class_name": operation.get("class_name"),
                     "old_name": operation.get("old_name"),
                     "new_name": operation.get("new_name"),
                     "success": False,
