@@ -118,6 +118,10 @@ Tips:
    ```
 
    - **Claude Reference** [Custom MCP Configuration Tutorial](https://docs.anthropic.com/en/docs/claude-code/mcp)
+   ```bash
+   # Use claude code as follows
+   claude mcp add jeb -- npx -y @xi0yu/jebmcp-proxy
+   ```
 
 2. Configure MCP Service in JEB (Required for both methods)
    - Open JEB client
