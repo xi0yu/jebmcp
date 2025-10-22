@@ -120,7 +120,7 @@ JEBMCP 主要特性：
    - **Claude 参考** [自定义 mcp 配置教程](https://docs.anthropic.com/zh-CN/docs/claude-code/mcp)
    ```bash
    # 使用claude code参考如下方式
-   claude mcp add jeb -- npx -y @xi0yu/jebmcp-proxy
+   claude mcp add jeb -- "npx -y @xi0yu/jebmcp-proxy"
    ```
 
 
