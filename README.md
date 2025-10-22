@@ -66,7 +66,48 @@ JEBMCP 主要特性：
 
 ## 使用方法
 
-### 方式一：使用 NPM 包（推荐）
+### 方式一：Python 直接启动（SSE 协议）
+
+适用于 Claude / Claude Code，使用 SSE 或 HTTP 协议直接启动 MCP 服务器：
+
+**选项 1：SSE 传输（传统方式）**
+```bash
+python src/server.py --transport sse --host 127.0.0.1 --port 16162
+```
+注意：使用 Ctrl+C 关闭时可能会显示一些 CancelledError 警告，这是正常的，不影响服务器关闭。
+
+**选项 2：HTTP 传输（推荐，关闭更干净）**
+```bash
+python src/server.py --transport http --host 127.0.0.1 --port 16162
+```
+
+启动后，在 Claude Code 中配置：
+
+**SSE 传输配置：**
+```json
+{
+   "mcpServers": {
+      "jeb": {
+         "url": "http://127.0.0.1:16162/sse"
+      }
+   }
+}
+```
+
+**HTTP 传输配置：**
+```json
+{
+   "mcpServers": {
+      "jeb": {
+         "url": "http://127.0.0.1:16162/mcp"
+      }
+   }
+}
+```
+
+**注意**：启动前请确保已在 JEB 中加载 `MCP.py` 脚本。
+
+### 方式二：使用 NPM 包（推荐）
 
 **JEBMCP** 已发布到 NPM 官网，可以直接使用 `npx` 执行，无需下载本地 `server.py`：
 

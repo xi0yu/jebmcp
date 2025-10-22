@@ -6,6 +6,7 @@ import json
 import shutil
 import argparse
 import http.client
+import signal
 
 from fastmcp import FastMCP
 
@@ -433,4 +434,10 @@ def main():
         mcp.run(transport="sse", host=args.host, port=args.port)
 
 if __name__ == "__main__":
-    main()
+    # 注意：Ctrl+C 关闭 SSE 服务器时可能会显示一些 CancelledError 堆栈
+    # 这是 FastMCP/uvicorn 的已知行为，不影响服务器正常关闭
+    try:
+        main()
+    except (KeyboardInterrupt, SystemExit):
+        # 优雅退出，不显示额外错误
+        pass
