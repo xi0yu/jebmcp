@@ -20,7 +20,7 @@ def make_jsonrpc_request(method, *params, jeb_host="127.0.0.1", jeb_port=16161, 
     转发到本地 JEB 插件的 JSON-RPC 接口 (默认 http://127.0.0.1:16161/mcp)
     """
     global jsonrpc_request_id
-    conn = http.client.HTTPConnection(jeb_host, jeb_port, timeout=30)
+    conn = http.client.HTTPConnection(jeb_host, jeb_port, timeout=120)
     request = {
         "jsonrpc": "2.0",
         "method": method,
