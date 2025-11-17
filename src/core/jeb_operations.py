@@ -312,7 +312,7 @@ class JebOperations(object):
             new_name = self._extract_last_segment(new_name)
             for method in clazz.getMethods():
                 if method.getName() == method_name:
-                    if keep_prefix and not new_name.startswith(method_name.getName() + "_"):
+                    if keep_prefix and not new_name.startswith(method.getName() + "_"):
                         new_name = method.getName() + "_" + new_name
                     is_renamed = method.setName(new_name)
                     break
