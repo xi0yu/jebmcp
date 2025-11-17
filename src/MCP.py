@@ -10,14 +10,15 @@ import traceback
 import os
 from urlparse import urlparse
 import BaseHTTPServer
+import time
 
 # JEB imports
 from com.pnfsoftware.jeb.client.api import IScript, IGraphicalClientContext
 
-from javax.swing import JFrame, JLabel
-from java.awt import BorderLayout, Color
+from javax.swing import JFrame, JLabel, JButton, JPanel
+from java.awt import BorderLayout, Color, Font, GridLayout
+from java.awt.event import ActionListener, WindowAdapter, WindowEvent
 from java.lang import Runnable, Thread
-from java.awt.event import WindowAdapter
 
 # Import our modular components
 from core.project_manager import ProjectManager
@@ -53,7 +54,7 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         response_body = json.dumps(response)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(response_body))
+        self.send_header("Content-Length", str(len(response_body.encode('utf-8'))))
         self.end_headers()
         self.wfile.write(response_body)
 
@@ -242,24 +243,77 @@ class MCPServer:
 
 
 class UIThread(Runnable):
-    def __init__(self, listener):
+    def __init__(self, listener, mcp_server):
         self.listener = listener
+        self.mcp_server = mcp_server
 
     def run(self):
-        frame = JFrame(u"关闭窗口将停止 JEBMCP")
-        frame.setSize(400, 100)
+        frame = JFrame(u"🌸 JEB MCP 服务 🌸")
+        frame.setSize(500, 180)
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
         frame.setLocationRelativeTo(None)
 
-        
-        label = JLabel(u"jeb mcp 服务运行中")
-        label.setForeground(Color.BLACK)
-        label.setHorizontalAlignment(JLabel.CENTER)  # 居中显示
-        frame.add(label, BorderLayout.CENTER)
-        
-        frame.setVisible(True)
+        # 主面板
+        panel = JPanel()
+        panel.setLayout(BorderLayout())
+        frame.add(panel)
 
+        # 状态标签
+        status_text = u"<html>" \
+                    u"<center>" \
+                    u"<b><font color='#FF69B4' size='5'>JEB MCP 服务正在运行</font></b><br>" \
+                    u"<font color='#4B0082' size='4'>关闭窗口或点击按钮将停止服务</font><br>" \
+                    u"<font color='#0000FF' size='3'>更多信息请参考文档</font>" \
+                    u"</center>" \
+                    u"</html>"
+        status_label = JLabel(status_text)
+        status_label.setHorizontalAlignment(JLabel.CENTER)
+        status_label.setVerticalAlignment(JLabel.CENTER)
+        panel.add(status_label, BorderLayout.CENTER)
+
+        # 按钮面板
+        button_panel = JPanel()
+        button_panel.setLayout(GridLayout(1, 1, 5, 5))
+        panel.add(button_panel, BorderLayout.SOUTH)
+
+        # 停止按钮
+        class StopButtonListener(ActionListener):
+            def actionPerformed(self, event):
+                # 统一触发窗口关闭事件
+                frame.dispatchEvent(WindowEvent(frame, WindowEvent.WINDOW_CLOSING))
+            def __init__(self):
+                pass
+
+        stop_button = JButton(u"Stop MCP!")
+        stop_button.addActionListener(StopButtonListener())
+        stop_button.setBackground(Color(255, 182, 193))
+        stop_button.setForeground(Color.BLACK)
+        stop_button.setFont(Font("Arial", Font.BOLD, 14))
+        button_panel.add(stop_button)
+
+        # 显示窗口
+        frame.setVisible(True)
         frame.addWindowListener(self.listener)
+# class UIThread(Runnable):
+#     def __init__(self, listener):
+#         self.listener = listener
+
+#     def run(self):
+#         frame = JFrame(u"JEB MCP 服务")
+#         frame.setSize(400, 100)
+#         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+#         frame.setLocationRelativeTo(None)
+
+        
+#         label = JLabel(u"<html>JEB MCP 服务正在运行<br>关闭窗口将停止服务</html>")
+#         label.setForeground(Color.BLACK)
+#         label.setHorizontalAlignment(JLabel.CENTER)
+#         label.setVerticalAlignment(JLabel.CENTER)
+#         frame.add(label, BorderLayout.CENTER)
+        
+#         frame.setVisible(True)
+
+#         frame.addWindowListener(self.listener)
 
 
 class MCP(IScript):
@@ -267,11 +321,9 @@ class MCP(IScript):
         self.mcpServer = MCPServer()
 
     def run(self, ctx):
-        # 检测是否为图形客户端环境
         is_graphical = isinstance(ctx, IGraphicalClientContext)
         
         if is_graphical:
-            # 图形环境：创建UI窗口
             print(u"[MCP] 在图形客户端环境中运行")
             
             class WindowCloseListener(WindowAdapter):
@@ -282,25 +334,17 @@ class MCP(IScript):
                     self.mcp_server.term()
                     print(u"[MCP] 窗口已关闭，停止 JEBMCP 服务")
 
-            t = Thread(UIThread(WindowCloseListener(self.mcpServer)))
+            listener = WindowCloseListener(self.mcpServer)
+            ui_thread = UIThread(WindowCloseListener(self.mcpServer), self.mcpServer)
+            t = Thread(ui_thread)
             t.start()
+            # t = Thread(UIThread(WindowCloseListener(self.mcpServer)))
+            # t.start()
+            self.mcpServer.run(ctx)
         else:
-            # 非图形环境（如Linux命令行）：使用后台模式
-            print(u"[MCP] 在命令行环境中运行，使用后台模式")
-            print(u"[MCP] 服务将持续运行，使用 Ctrl+C 停止")
-            
-        # 启动MCP服务器
-        self.mcpServer.run(ctx)
-        
-        if not is_graphical:
-            print(u"[MCP] 服务已启动，按 Ctrl+C 退出")
+            print(u"[MCP] 服务已启动，按回车退出")
+            self.mcpServer.run(ctx)
             try:
-                # 在非图形环境下保持主线程运行
-                while True:
-                    Thread.sleep(5000)
-            except KeyboardInterrupt:
-                print(u"[MCP] 接收到中断信号，正在退出...")
-                self.mcpServer.term()
-            except Exception as e:
-                print(u"[MCP] 运行时异常: %s" % str(e))
+                raw_input()  # 等待用户按回车
+            finally:
                 self.mcpServer.term()

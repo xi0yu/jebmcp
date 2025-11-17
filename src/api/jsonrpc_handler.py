@@ -14,16 +14,22 @@ class JSONRPCHandler(object):
         # 直接映射到jeb_operations的方法，无需包装函数
         self.method_handlers = {
             "ping": lambda params: "pong",  # ping方法特殊处理
+            "find_class": jeb_operations.find_class,
+            "find_method": jeb_operations.find_method,
+            "find_field": jeb_operations.find_field,
             "get_app_manifest": jeb_operations.get_app_manifest,
             "get_method_decompiled_code": jeb_operations.get_method_decompiled_code,
             "get_class_decompiled_code": jeb_operations.get_class_decompiled_code,
             "get_method_callers": jeb_operations.get_method_callers,
             "get_method_overrides": jeb_operations.get_method_overrides,
             "get_field_callers": jeb_operations.get_field_callers,
+            "is_class_renamed": jeb_operations.is_class_renamed,
+            "is_method_renamed": jeb_operations.is_method_renamed,
+            "is_field_renamed": jeb_operations.is_field_renamed,
             "rename_class_name": jeb_operations.rename_class_name,
             "rename_method_name": jeb_operations.rename_method_name,
             "rename_field_name": jeb_operations.rename_field_name,
-            "rename_batch_symbols": jeb_operations.rename_batch_symbols,
+            "set_parameter_name": jeb_operations.set_parameter_name,
             "get_current_project_info": jeb_operations.get_current_project_info,
             "get_method_smali": jeb_operations.get_method_smali,
             "get_class_type_tree": jeb_operations.get_class_type_tree,
@@ -35,7 +41,6 @@ class JSONRPCHandler(object):
             "load_project": jeb_operations.load_project,
             "has_projects": jeb_operations.has_projects,
             "get_projects": jeb_operations.get_projects,
-            "unload_projects": jeb_operations.unload_projects,
         }
 
 
@@ -82,6 +87,6 @@ class JSONRPCHandler(object):
                 return handler(*params)  # 其他方法直接展开参数
             
         except Exception as e:
-            print("Error handling {0}: {1}".format(method, str(e)))
+            print(u"Error handling {0}: {1}".format(method, str(e)))
             traceback.print_exc()
             raise

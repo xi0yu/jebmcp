@@ -13,6 +13,7 @@ from com.pnfsoftware.jeb.core.actions import ActionXrefsData, Actions, ActionCon
 # Import signature utilities using absolute path for JEB compatibility
 import sys
 import os
+import traceback
 from java.io import File
 # Add the src directory to Python path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +29,27 @@ class JebOperations(object):
     def __init__(self, project_manager, ctx=None):
         self.project_manager = project_manager
         self.ctx = ctx
+
+    def _get_current_dex_unit(self):
+        """
+        快速获取当前项目的 Dex 单元。
+        返回: (dex_unit, None) 如果成功
+            (None, error_dict) 如果失败
+        """
+        project = self.project_manager.get_current_project()
+        if not project:
+            return None, {"success": False, "error": "No project currently loaded in JEB"}
+
+        dex_unit = self.project_manager.find_dex_unit(project)
+        if not dex_unit:
+            return None, {"success": False, "error": "No DEX unit found in the current project"}
+
+        return dex_unit, None
+
+    def _extract_last_segment(self, new_name):
+        if "." in new_name:
+            return new_name.split(".")[-1]
+        return new_name
 
     def get_app_manifest(self):
         """Get the manifest of the currently loaded APK project in JEB"""
@@ -48,25 +70,18 @@ class JebOperations(object):
         text = TextDocumentUtil.getText(doc)
         return {"success": True, "manifest": text}
     
-    def get_method_decompiled_code(self, class_name, method_name):
+    def get_method_decompiled_code(self, class_signature, method_name):
         """Get the decompiled code of the given method in the currently loaded APK project"""
-        if not class_name or not method_name:
-            return {"success": False, "error": "Both class name and method name are required"}
 
-        project = self.project_manager.get_current_project()
-        if project is None:
-            return {"success": False, "error": "No project currently loaded in JEB"}
-        
-        dex_unit = self.project_manager.find_dex_unit(project)
-        if dex_unit is None:
-            return {"success": False, "error": "No dex unit found in the current project"}
-        
+        dexUnit, err = self._get_current_dex_unit()
+        if err: return err
+
         # Find method
-        method = self._find_method(dex_unit, class_name, method_name)
+        method = self._find_method(dexUnit, class_signature, method_name)
         if method is None:
             return {"success": False, "error": "Method not found: %s" % method_name}
         
-        decomp = DecompilerHelper.getDecompiler(dex_unit)
+        decomp = DecompilerHelper.getDecompiler(dexUnit)
         if not decomp:
             return {"success": False, "error": "Cannot acquire decompiler for unit"}
 
@@ -93,7 +108,24 @@ class JebOperations(object):
                 return method
         
         return None
-    
+    def _find_field(self, dex_unit, class_signature, field_name):
+        """Find a field in the dex unit by class signature and field name"""
+        if not class_signature or not field_name:
+            return None
+
+        # normalize class signature for JNI format before lookup
+        normalized_signature = convert_class_signature(class_signature)
+        clazz = dex_unit.getClass(normalized_signature)
+        if clazz is None:
+            return None
+
+        # forEach field in the class
+        for field in clazz.getFields():
+            if field.getName() == field_name:
+                return field
+
+        return None
+
     def get_class_decompiled_code(self, class_signature):
         """Get the decompiled code of a class in the current APK project"""
         if not class_signature:
@@ -122,35 +154,30 @@ class JebOperations(object):
         text = decomp.getDecompiledClassText(clazz.getSignature(True))
         return {"success": True, "decompiled_code": text, "class_signature": clazz.getSignature(True)}
     
-    def get_method_callers(self, class_name, method_name):
+    def get_method_callers(self, class_signature, method_name):
         """Get the callers of the given method in the currently loaded APK project"""
-        if not class_name or not method_name:
+        if not class_signature or not method_name:
             return {"success": False, "error": "Both class name and method name are required"}
 
-        project = self.project_manager.get_current_project()
-        if project is None:
-            return {"success": False, "error": "No project currently loaded in JEB"}
-        
-        dex_unit = self.project_manager.find_dex_unit(project)
-        if dex_unit is None:
-            return {"success": False, "error": "No dex unit found in the current project"}
+        dexUnit, err = self._get_current_dex_unit()
+        if err: return None
 
         # Find method
-        method = self._find_method(dex_unit, class_name, method_name)
+        method = self._find_method(dexUnit, class_signature, method_name)
         if method is None:
             return {"success": False, "error": "Method not found: %s" % method_name}
         
         action_xrefs_data = ActionXrefsData()
-        action_context = ActionContext(dex_unit, Actions.QUERY_XREFS, method.getItemId(), None)
+        action_context = ActionContext(dexUnit, Actions.QUERY_XREFS, method.getItemId(), None)
         ret = []
-        if dex_unit.prepareExecution(action_context, action_xrefs_data):
+        if dexUnit.prepareExecution(action_context, action_xrefs_data):
             for i in range(action_xrefs_data.getAddresses().size()):
                 ret.append((action_xrefs_data.getAddresses()[i], action_xrefs_data.getDetails()[i]))
         return {"success": True, "method_signature": method.getSignature(True), "callers": ret}
     
-    def get_field_callers(self, class_name, field_name):
+    def get_field_callers(self, class_signature, field_name):
         """Get the callers/references of the given field in the currently loaded APK project"""
-        if not class_name or not field_name:
+        if not class_signature or not field_name:
             return {"success": False, "error": "Both class signature and method name are required"}
 
         project = self.project_manager.get_current_project()
@@ -162,9 +189,9 @@ class JebOperations(object):
             return {"success": False, "error": "No dex unit found in the current project"}
         
         # Get the class first
-        dex_class = dex_unit.getClass(convert_class_signature(class_name))
+        dex_class = dex_unit.getClass(convert_class_signature(class_signature))
         if dex_class is None:
-            return {"success": False, "error": "Class not found: %s" % class_name}
+            return {"success": False, "error": "Class not found: %s" % class_signature}
         
         # Find the field in the class
         field = None
@@ -189,7 +216,7 @@ class JebOperations(object):
         
         return {
             "success": True,
-            "class_name": class_name,
+            "class_name": class_signature,
             "field_name": field_name,
             "field_xrefs": field_xrefs
         }
@@ -219,7 +246,7 @@ class JebOperations(object):
                 ret.append((data.getAddresses()[i], data.getDetails()[i]))
         return {"success": True, "method_signature": method_signature, "overrides": ret}
     
-    def rename_class_name(self, class_name, new_name):
+    def rename_class_name(self, class_name, new_name, keep_prefix):
         """Set the name of a class in the current APK project"""
         if not class_name:
             return {"success": False, "error": "class name is required"}
@@ -238,6 +265,10 @@ class JebOperations(object):
             if dex_class is None:
                 return {"success": False, "error": "Class not found: %s" % class_name}
             
+            new_name = self._extract_last_segment(new_name)
+            if keep_prefix and not new_name.startswith(dex_class.getName() + "_"):
+                new_name = dex_class.getName() + "_" + new_name
+
             if not dex_class.setName(new_name):
                 return  {"success": False, "error": "Failed to set class name: %s" % new_name}
             
@@ -247,9 +278,17 @@ class JebOperations(object):
                 "message": "Class name retrieved successfully"
             }
         except Exception as e:
-            return {"success": False, "error": "Failed to set class name. exception: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "Failed to set class name for '%s': %s. "
+                    "You may try updating JEB or this plugin to the latest version to resolve potential API changes."
+                    % (class_name, str(e))
+                ),
+                "traceback": traceback.format_exc()
+            }
     
-    def rename_method_name(self, class_name, method_name, new_name):
+    def rename_method_name(self, class_name, method_name, new_name, keep_prefix):
         """Set the name of a method in the specified class"""
         if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -270,8 +309,11 @@ class JebOperations(object):
             
             # Find method by name in the class
             is_renamed = False
+            new_name = self._extract_last_segment(new_name)
             for method in clazz.getMethods():
                 if method.getName() == method_name:
+                    if keep_prefix and not new_name.startswith(method_name.getName() + "_"):
+                        new_name = method.getName() + "_" + new_name
                     is_renamed = method.setName(new_name)
                     break
             
@@ -286,9 +328,17 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename method '%s' in class %s: %s" % (method_name, class_name, str(e))}
+            return {
+                "success": False,
+                "error": (
+                    "Failed to rename method '%s' in class '%s': %s. "
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                    % (method_name, class_name, str(e))
+                ),
+                "traceback": traceback.format_exc()
+            }
     
-    def rename_field_name(self, class_name, field_name, new_name):
+    def rename_field_name(self, class_name, field_name, new_name, keep_prefix):
         """Set the name of a field in the specified class"""
         if not class_name or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
@@ -312,8 +362,11 @@ class JebOperations(object):
             
             # Find field by name in the class
             is_renamed = False
+            new_name = self._extract_last_segment(new_name)
             for field in clazz.getFields():
                 if field.getName() == field_name:
+                    if keep_prefix and not new_name.startswith(field.getName() + "_"):
+                        new_name = field.getName() + "_" + new_name
                     is_renamed = field.setName(new_name)
                     break
             
@@ -328,177 +381,16 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to rename field '%s' in class %s: %s" % (field_name, class_name, str(e))}
-    
-    def rename_batch_symbols(self, rename_operations):
-        """
-        批量重命名类、方法和字段（支持 JSON 字符串或 Python 列表）。
-
-        Args:
-            rename_operations (str 或 list):
-                JSON 数组字符串或直接列表，每个元素包含:
-                - type: "class" / "method" / "field"
-                - old_name: 旧名称（完整路径）
-                - new_name: 新名称，仅符号名（可为完整路径，函数会自动提取符号名）
-
-        示例：
-        [
-            {"type": "class", "old_name": "com.example.TestClass", "new_name": "RenamedTestClass"},
-            {"type": "method", "old_name": "com.example.TestClass.testMethod", "new_name": "renamedTestMethod"},
-            {"type": "field", "old_name": "com.example.TestClass.testField", "new_name": "renamedTestField"}
-        ]
-
-        Returns:
-            dict: 包含操作结果，包括 success, summary, failed_operations, message
-        """
-        # Handle JSON string input (support both str and unicode for Python 2/3 compatibility)
-        if isinstance(rename_operations, (str, unicode)):
-            try:
-                parsed_data = json.loads(rename_operations)
-                # Check if it's wrapped in an object with 'operations' key
-                if isinstance(parsed_data, dict) and 'rename_operations' in parsed_data:
-                    rename_operations = parsed_data['rename_operations']
-                else:
-                    rename_operations = parsed_data
-            except (ValueError, TypeError) as e:
-                return {
-                    "success": False, 
-                    "error": "Invalid JSON format in rename_operations: %s" % str(e),
-                    "summary": {"total": 0, "successful": 0, "failed": 0},
-                    "failed_operations": [],
-                    "message": "JSON 解析失败"
-                }
-        
-        if not rename_operations or not isinstance(rename_operations, list):
-            # Add debug information to help identify the issue
-            data_type = type(rename_operations).__name__
-            data_repr = str(rename_operations)[:200] if rename_operations else "None"
             return {
-                "success": False, 
-                "error": "rename_operations must be a non-empty list or valid JSON string. Got type: %s, data: %s" % (data_type, data_repr),
-                "summary": {"total": 0, "successful": 0, "failed": 0},
-                "failed_operations": [],
-                "message": "参数格式错误"
+                "success": False,
+                "error": (
+                    "Exception occurred while renaming field '{field_name}' in class '{class_name}' to '{new_name}': {exc}\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(field_name=field_name, class_name=class_name, new_name=new_name, exc=str(e)),
+                "traceback": traceback.format_exc()
             }
-        
-        successful_count = 0
-        failed_count = 0
-        failed_operations = []
-        
-        for operation in rename_operations:
-            try:
-                # Validate operation structure
-                if not isinstance(operation, dict):
-                    failed_operations.append({
-                        "type": "unknown",
-                        "success": False,
-                        "error": "Operation must be a dictionary"
-                    })
-                    failed_count += 1
-                    continue
-                
-                op_type = operation.get("type")
-                old_name = operation.get("old_name")
-                new_name = operation.get("new_name")
-                
-                # Basic validation
-                required_fields = [op_type, old_name, new_name]
-                if not all(required_fields):
-                    failed_operations.append({
-                        "type": op_type or "unknown",
-                        "old_name": old_name,
-                        "new_name": new_name,
-                        "success": False,
-                        "error": "Missing required fields: type, old_name, new_name"
-                    })
-                    failed_count += 1
-                    continue
-                
-                # Parse old_name to extract class_name and symbol_name
-                if op_type == "class":
-                    class_name = old_name
-                    symbol_name = ""
-                elif op_type in ["method", "field"]:
-                    # Split old_name to get class_name and symbol_name
-                    parts = old_name.rsplit(".", 1)
-                    if len(parts) != 2:
-                        failed_operations.append({
-                            "type": op_type,
-                            "old_name": old_name,
-                            "new_name": new_name,
-                            "success": False,
-                            "error": "Invalid old_name format for %s. Expected format: 'class.name.symbol'" % op_type
-                        })
-                        failed_count += 1
-                        continue
-                    class_name, symbol_name = parts
-                else:
-                    failed_operations.append({
-                        "type": op_type,
-                        "old_name": old_name,
-                        "new_name": new_name,
-                        "success": False,
-                        "error": "Unknown operation type: %s" % op_type
-                    })
-                    failed_count += 1
-                    continue
-                
-                # Parse new_name to extract actual symbol name (support both simple name and full path)
-                actual_new_name = new_name
-                if op_type == "class":
-                    # For class, new_name can be full path or simple name
-                    actual_new_name = new_name
-                elif op_type in ["method", "field"]:
-                    # For method/field, if new_name contains dots, extract the last part as symbol name
-                    if "." in new_name:
-                        actual_new_name = new_name.rsplit(".", 1)[1]
-                    else:
-                        actual_new_name = new_name
-                
-                # Execute rename operation based on type
-                if op_type == "class":
-                    rename_result = self.rename_class_name(class_name, actual_new_name)
-                elif op_type == "method":
-                    rename_result = self.rename_method_name(class_name, symbol_name, actual_new_name)
-                elif op_type == "field":
-                    rename_result = self.rename_field_name(class_name, symbol_name, actual_new_name)
-                
-                # Check result and update counters
-                if rename_result.get("success", False):
-                    successful_count += 1
-                else:
-                    failed_operations.append({
-                        "type": op_type,
-                        "old_name": old_name,
-                        "new_name": new_name,
-                        "success": False,
-                        "error": rename_result.get("error", "Unknown error")
-                    })
-                    failed_count += 1
-                
-            except Exception as e:
-                failed_operations.append({
-                    "type": operation.get("type", "unknown"),
-                    "old_name": operation.get("old_name"),
-                    "new_name": operation.get("new_name"),
-                    "success": False,
-                    "error": "Exception during rename: %s" % str(e)
-                })
-                failed_count += 1
-        
-        return {
-            "success": failed_count == 0,
-            "summary": {
-                "total": len(rename_operations),
-                "successful": successful_count,
-                "failed": failed_count
-            },
-            "failed_operations": failed_operations,
-            "message": "批量重命名完成: 总共 %d 个操作，成功 %d 个，失败 %d 个" % (len(rename_operations), successful_count, failed_count)
-        }
-    
 
-     
+    
     def get_method_smali(self, class_signature, method_name):
         """Get all Smali instructions for a specific method in the given class"""
         if not class_signature or not method_name:
@@ -901,6 +793,232 @@ class JebOperations(object):
     def unload_projects(self):
         """Unload all projects from JEB"""
         return self.project_manager.unload_projects()
+
+    def is_class_renamed(self, class_signature):
+        """
+        Check if the specified class has been renamed in the current project.
+        """
+        try:
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+            
+            return {
+                "success": True,
+                "renamed": dex_class.isRenamed()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
+
+    def is_method_renamed(self, class_signature, method_signature):
+        """
+        Check if the specified method has been renamed in the current project.
+        """
+        try: 
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            
+            for method in dex_class.getMethods():
+                if method_signature in method.getSignature(True):
+                    return {
+                        "success": True,
+                        "renamed": method.isRenamed()
+                    }
+            
+            return {"success": False, "error": "Method not found: %s" % method_signature}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
+
+    def is_field_renamed(self, class_signature, field_signature):
+        """
+        Check if the specified field has been renamed in the current project.
+        """
+        try: 
+            project = self.project_manager.get_current_project()
+            if project is None:
+                return {"success": False, "error": "No project currently loaded in JEB"}
+
+            dex_unit = self.project_manager.find_dex_unit(project)
+            if dex_unit is None:
+                return {"success": False, "error": "No DEX unit found in the current project"}
+
+            dex_class = dex_unit.getClass(convert_class_signature(class_signature))
+            if dex_class is None:
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            
+            for field in dex_class.getFields():
+                if field_signature in field.getSignature(True):
+                    return {
+                        "success": True,
+                        "renamed": field.isRenamed()
+                    }
+            
+            return {"success": False, "error": "Field not found: %s" % field_signature}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
+    def set_parameter_name(self, class_signature, method_name, index, name, fail_on_conflict = True, notify = True):
+        """
+        Set the name of a parameter in the specified method of the current project.
+        """
+        try: 
+            dexUnit, err = self._get_current_dex_unit()
+            if err: return err
+
+            dexMethod = self._find_method(dexUnit, class_signature, method_name)
+            if dexMethod is None:
+                return {"success": False, "error": "Method not found: %s" % method_name}
+
+            if index < 0:
+                return {"success": False, "error": "Parameter index cannot be negative: %d" % index}
+            
+            dexMethodParameterLength = len(dexMethod.getParameterTypes())
+            if index >= dexMethodParameterLength:
+                return {"success": False, "error": "Parameter index out of range: %d" % index}
+            
+            result = dexMethod.setParameterName(index, name, fail_on_conflict, notify)
+            if not result:
+                return {"success": False, "error": "Failed to set parameter name"}
+            
+            return {"success": True}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+    
+    def find_class(self, class_signature):
+        """Find a class by its signature in the current project"""
+        try: 
+            dexUnit, err = self._get_current_dex_unit()
+            if err: return err
+            
+            dexClass = dexUnit.getClass(convert_class_signature(class_signature))
+            if dexClass is None: 
+                return {"success": False, "error": "Class not found: %s" % class_signature}
+
+            return {
+                "success": True, 
+                "current_name": dexClass.getName(True),
+                "original_name": dexClass.getName(False),
+                "signature": dexClass.getSignature(True),
+                "renamed": dexClass.isRenamed()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+        
+    
+    def find_method(self, class_signature, method_name):
+        """Find a method by its signature in the current project"""
+        try: 
+            dexUnit, err = self._get_current_dex_unit()
+            if err: return err
+
+            dexMethod = self._find_method(dexUnit, class_signature, method_name)
+            if dexMethod is None: 
+                return {"success": False, "error": "Method not found: %s" % method_name}
+            
+            dexResultType = "None" if dexMethod.getReturnType() is None else dexMethod.getReturnType().getSignature(True)
+
+            return {
+                "success": True, 
+                "current_name": dexMethod.getName(True),
+                "original_name": dexMethod.getName(False),
+                "signature": dexMethod.getSignature(True),
+                "result_type": dexResultType,
+                "renamed": dexMethod.isRenamed(),
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
+    def find_field(self, class_signature, field_name):
+        """Find a field by its signature in the current project"""
+        try: 
+            dexUnit, err = self._get_current_dex_unit()
+            if err: return err
+
+            dexField = self._find_field(dexUnit, class_signature, field_name)
+            if dexField is None: 
+                return {"success": False, "error": "Field not found: %s" % field_name}
+            
+            return {
+                "success": True, 
+                "current_name": dexField.getName(True),
+                "original_name": dexField.getName(False),
+                "signature": dexField.getSignature(True),
+                "class_type_signature": dexField.getClassTypeSignature(True),
+                "renamed": dexField.isRenamed(),
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
 class GenericFlagParser:
     """解析 ICodeItem.getGenericFlags() 返回值，将其转换为可读标志列表"""
