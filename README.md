@@ -158,11 +158,14 @@ python src/server.py --transport http --host 127.0.0.1 --port 16162
                "is_class_renamed",
                "is_method_renamed",
                "is_field_renamed",
+               "is_package",
                "rename_class_name",
                "rename_method_name",
                "rename_field_name",
                "set_parameter_name",
-               "reset_parameter_name"
+               "reset_parameter_name",
+               "get_live_artifact_ids",
+               "switch_active_artifact"
             ]
          }
       }

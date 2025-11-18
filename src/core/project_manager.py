@@ -15,6 +15,7 @@ class ProjectManager(object):
     
     def __init__(self, ctx):
         self.ctx = ctx
+        self.active_artifact = None
     
     def _validate_ctx(self):
         if self.ctx is None:
@@ -22,10 +23,49 @@ class ProjectManager(object):
     
     def get_current_project(self):
         """Get the current main project from JEB context"""
-        if self.ctx is None:
-            return None
+        self._validate_ctx()
         return self.ctx.getMainProject()
+
+    def get_live_artifacts(self):
+        """Get a list of live artifacts from JEB context"""
+        prj =  self.get_current_project()
+        if prj is None:
+            raise Exception("No JEB project available")
+        
+        return prj.getLiveArtifacts()
+
+    def get_current_artifact(self):
+        """Get the current artifact from JEB context"""
+        if self.active_artifact is not None:
+            return self.active_artifact
+            
+        artifacts = self.get_live_artifacts()
+        if not artifacts or len(artifacts) == 0:
+            raise Exception("No JEB artifact available")
+        
+        auto_selected = [x for x in artifacts if x.getMainUnit().getFormatType() == "apk"]
+        if not auto_selected or len(auto_selected) == 0:
+            raise Exception("No APK artifact available")
+        
+        self.active_artifact = auto_selected[0]
+        return self.active_artifact
     
+    def get_current_apk_unit(self):
+        """Get the current DEX unit from JEB context"""
+        artifact = self.get_current_artifact()
+        if artifact is None:
+            return None
+        mainUnit = artifact.getMainUnit()
+        if mainUnit.getFormatType() == "apk":
+            return mainUnit.getDex()
+        return None
+    def get_current_dex_unit(self):
+        """Get the current DEX unit from JEB context"""
+        apkUnit = self.get_current_apk_unit()
+        if apkUnit is None:
+            return None
+        return apkUnit
+
     def find_apk_unit(self, project):
         """Find APK unit in the given project"""
         if project is None:
@@ -38,74 +78,47 @@ class ProjectManager(object):
             return None
         return project.findUnit(IDexUnit)
     
-    def is_project_loaded(self):
-        """Check if a project is currently loaded"""
-        project = self.get_current_project()
-        return project is not None
-    
-    def get_project_info(self):
-        """Get basic information about the current project"""
-        project = self.get_current_project()
-        if project is None:
-            return None
-        
-        info = {
-            'has_apk_unit': self.find_apk_unit(project) is not None,
-            'has_dex_unit': self.find_dex_unit(project) is not None
-        }
-        return info
-    
-    def get_project_details(self, project):
-        try:
-            dex_class_count = 0
-            dex_method_count = 0
-            dex_field_count = 0
-
-            for dex_unit in project.findUnits(IDexUnit):
-                dex_class_count += len(dex_unit.getClasses())
-                dex_method_count += len(dex_unit.getMethods())
-                dex_field_count += len(dex_unit.getFields())
-
-            package_name = "Unknown"
-            application_entry_class_name = "Unknown"
-            manifest_component_count = [
-                ("activities", 0),
-                ("services", 0),
-                ("receivers", 0),
-                ("providers", 0)
-            ]
-
-            for apk_unit in project.findUnits(IApkUnit):
-                if not apk_unit.hasApplication():
-                    continue
-                package_name = apk_unit.getPackageName() or "Unknown"
-                application_entry_class_name = apk_unit.getApplicationName() or "Unknown"
-                manifest_component_count = [
-                    ("activities", len(apk_unit.getActivities())),
-                    ("services", len(apk_unit.getServices())),
-                    ("receivers", len(apk_unit.getReceivers())),
-                    ("providers", len(apk_unit.getProviders()))
-                ]
-                break
-
+    def get_project_details(self):
+        apk_units = [
+            x.getMainUnit()
+            for x in self.get_live_artifacts()
+            if x.getMainUnit().getFormatType() == "apk"
+        ]
+        if not apk_units:
             return {
+                "success": False,
+                "error": "No APK unit found in the project"
+            }
+
+        results = []
+
+        for apk_unit in apk_units:
+            package_name = apk_unit.getPackageName() or "Unknown"
+            application_class_name = apk_unit.getApplicationName() or "Unknown"
+
+            activity_count = len(apk_unit.getActivities() or [])
+            service_count = len(apk_unit.getServices() or [])
+            receiver_count = len(apk_unit.getReceivers() or [])
+            provider_count = len(apk_unit.getProviders() or [])
+
+            permissions = apk_unit.getPermissions()
+            permissions = list(permissions) if permissions else []
+
+            results.append({
                 "package_name": package_name,
-                "application_entry_class_name": application_entry_class_name,
-                "dex_class_count": dex_class_count,
-                "dex_method_count": dex_method_count,
-                "dex_field_count": dex_field_count,
-                "manifest_component_count": manifest_component_count
-            }
-        except Exception as e:
-            return {
-                "package_name": "Error",
-                "application_entry_class_name": "Error",
-                "dex_class_count": 0,
-                "dex_method_count": 0,
-                "dex_field_count": 0,
-                "manifest_component_count": [],
-                "error_message": str(e)
-            }
+                "application_class": application_class_name,
+                "permissions": permissions,
+                "activities": activity_count,
+                "services": service_count,
+                "receivers": receiver_count,
+                "providers": provider_count,
+            })
+
+
+        return {
+            "count": len(results),
+            "apk_list": results
+        }
 
     def load_project(self, file_path):
         """Open a new project from file path
@@ -151,41 +164,16 @@ class ProjectManager(object):
     def has_projects(self):
         """Check if there are any projects loaded in JEB"""
         try:
-            self._validate_ctx()
-            engines_context = self.ctx.getEnginesContext()
-            if engines_context is None:
-                return {"success": False, "error": "No engines context available"}
-            
-            projects = engines_context.getProjects()
-            has_projects = projects is not None and len(projects) > 0
+            live_artifact_length = len([ x for x in self.get_live_artifacts() if x.getMainUnit().getFormatType() == "apk"])
+            has_projects = live_artifact_length > 0
             
             return {
                 "success": True, 
                 "has_projects": has_projects,
-                "project_count": len(projects) if projects else 0
+                "project_count": live_artifact_length
             }
         except Exception as e:
             return {"success": False, "error": "Failed to check projects: %s" % str(e)}
-    
-    def get_projects(self):
-        """Get information about all loaded projects in JEB"""
-        try:
-            self._validate_ctx()
-            engines_context = self.ctx.getEnginesContext()
-            if engines_context is None:
-                return {"success": False, "error": "No engines context available"}
-            
-            projects = engines_context.getProjects()
-            if projects is None or len(projects) == 0:
-                return {"success": True, "projects": []}
-            
-            project_list = []
-            for project in projects:
-                project_list.append(self.get_project_details(project))
-            
-            return {"success": True, "projects": project_list}
-        except Exception as e:
-            return {"success": False, "error": "Failed to get projects: %s" % str(e)}
     
     def unload_projects(self):
         """Unload all projects from JEB"""
@@ -205,3 +193,24 @@ class ProjectManager(object):
             }
         except Throwable as e:
             return {"success": False, "error": "Failed to unload projects: %s" % str(e)}
+
+    def get_live_artifact_ids(self):
+        """Get a list of live artifact IDs"""
+        return [
+            x.getMainUnit().getName()
+            for x in self.get_live_artifacts()
+            if x.getMainUnit().getFormatType() == "apk"
+        ] or []
+
+    def switch_active_artifact(self, artifact_id):
+        """Switch the active artifact in JEB"""
+        prj = self.get_current_project()
+        if prj is None:
+            return False
+        
+        selected_artifact = [x for x in prj.getLiveArtifacts() if x.getMainUnit().getName() == artifact_id]
+        if not selected_artifact:
+            return False
+        
+        self.active_artifact = selected_artifact[0]
+        return True

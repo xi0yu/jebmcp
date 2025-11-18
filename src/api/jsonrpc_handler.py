@@ -26,6 +26,7 @@ class JSONRPCHandler(object):
             "is_class_renamed": jeb_operations.is_class_renamed,
             "is_method_renamed": jeb_operations.is_method_renamed,
             "is_field_renamed": jeb_operations.is_field_renamed,
+            "is_package": jeb_operations.is_package,
             "rename_class_name": jeb_operations.rename_class_name,
             "rename_method_name": jeb_operations.rename_method_name,
             "rename_field_name": jeb_operations.rename_field_name,
@@ -41,6 +42,8 @@ class JSONRPCHandler(object):
             "load_project": jeb_operations.load_project,
             "has_projects": jeb_operations.has_projects,
             "get_projects": jeb_operations.get_projects,
+            "get_live_artifact_ids": jeb_operations.get_live_artifact_ids,
+            "switch_active_artifact": jeb_operations.switch_active_artifact,
         }
 
 

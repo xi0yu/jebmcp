@@ -549,36 +549,25 @@ class JebOperations(object):
     def get_current_project_info(self):
         """Get detailed status information about JEB and loaded projects"""
         try:
-            # Check MCP to JEB connection
-            connection_status = "connected"
-            project_info = "No project currently loaded in JEB"
-            project = self.project_manager.get_current_project()
-            if project is not None:
-                try:
-                    project_info = self.project_manager.get_project_details(project)
-                except Exception as e:
-                    print("Error getting project: %s" % str(e))
-            
-            # Get JEB version info (optional)
             jeb_version = self.ctx.getSoftwareVersion().toString()
             
+            current_artifact = self.project_manager.get_current_artifact() or None
+            current_artifact_id = current_artifact.getMainUnit().getName() if current_artifact else "N/A"
             return {
-                "connection": {
-                    "status": connection_status,
-                    "message": "MCP to JEB connection status"
-                },
-                "project_info": project_info,
+                "success": True,
+                "current_artifact_id": current_artifact_id,
+                "project_info": self.project_manager.get_project_details(),
                 "jeb_version": jeb_version
             }
             
         except Exception as e:
             return {
-                "connection": {
-                    "status": "error",
-                    "message": "Failed to check status: %s" % str(e)
-                },
-                "project_info": None,
-                "jeb_version": None
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
             }
     
 
@@ -788,7 +777,10 @@ class JebOperations(object):
     
     def get_projects(self):
         """Get information about all loaded projects in JEB"""
-        return self.project_manager.get_projects()
+        try:            
+            return {"success": True, "projects": self.project_manager.get_project_details()}
+        except Exception as e:
+            return {"success": False, "error": "Failed to get projects: %s" % str(e)}
     
     def unload_projects(self):
         """Unload all projects from JEB"""
@@ -898,6 +890,32 @@ class JebOperations(object):
                 ).format(exc=str(e)),
                 "traceback": traceback.format_exc()
             }
+
+    def is_package(self, package_name):
+        """
+        Check if the specified package_name is a package.
+        """
+        try:
+            dexUnit = self.project_manager.get_current_dex_unit()
+            if dexUnit is None:
+                return {"success": False, "error": "No DEX unit currently loaded in JEB"}
+            
+            isPackage = False
+            dexPackage = dexUnit.getPackage(package_name)
+            if dexPackage is not None:
+                isPackage = True
+            
+            return {"success": True, "is_package": isPackage}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
 
     def set_parameter_name(self, class_signature, method_name, index, name, fail_on_conflict = True, notify = True):
         """
@@ -1019,6 +1037,37 @@ class JebOperations(object):
                 ).format(exc=str(e)),
                 "traceback": traceback.format_exc()
             }
+    
+    def get_live_artifact_ids(self):
+        """获取当前活动项目的所有活动 Artifact IDs"""
+        try:
+            return {"success": True, "artifact_ids": self.project_manager.get_live_artifact_ids()}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+    
+    def switch_active_artifact(self, artifact_id):
+        """切换活动 Artifact"""
+        try: 
+            if self.project_manager.switch_active_artifact(artifact_id):
+                return {"success": True}
+            return {"success": False, "error": "Failed to switch active artifact"}
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+
 
 class GenericFlagParser:
     """解析 ICodeItem.getGenericFlags() 返回值，将其转换为可读标志列表"""

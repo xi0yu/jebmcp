@@ -379,6 +379,15 @@ def is_field_renamed(class_signature: str, field_name: str):
     return _jeb_call('is_field_renamed', class_signature, field_name)
 
 @mcp.tool()
+def is_package(package_name: str):
+    """
+    Check if the specified package exists in the currently loaded APK project.
+
+    @param package_name: Package name to check (e.g. "com.example")
+    """
+    return _jeb_call('is_package', package_name)
+
+@mcp.tool()
 def set_parameter_name(class_signature: str, method_name: str, index: int, name: str, fail_on_conflict: bool = True, notify: bool = True):
     """
     Set a custom name for a parameter in the specified method of a class.
@@ -451,6 +460,21 @@ def find_field(class_signature: str, field_name: str):
     """
     return _jeb_call('find_field', class_signature, field_name)
 
+@mcp.tool()
+def get_live_artifact_ids():
+    """
+    Get a list of live artifact IDs currently loaded in JEB Pro.
+    """
+    return _jeb_call('get_live_artifact_ids')
+
+@mcp.tool()
+def switch_active_artifact(artifact_id):
+    """
+    Switch the active artifact in JEB Pro to the specified artifact ID.
+
+    @param artifact_id: Artifact ID to switch to
+    """
+    return _jeb_call('switch_active_artifact', artifact_id)
 
 
 
