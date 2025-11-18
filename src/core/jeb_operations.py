@@ -296,9 +296,9 @@ class JebOperations(object):
             new_name = self._extract_last_segment(new_name)
             finded_field = self._find_field(dexUnit, class_name, field_name)
             if finded_field:                
-                if keep_prefix and not new_name.startswith(field.getName() + "_"):
-                    new_name = field.getName() + "_" + new_name
-                is_renamed = field.setName(new_name)
+                if keep_prefix and not new_name.startswith(finded_field.getName() + "_"):
+                    new_name = finded_field.getName() + "_" + new_name
+                is_renamed = finded_field.setName(new_name)
 
             if not is_renamed:
                 return {"success": False, "error": "Rename failed for field '%s' in class %s" % (field_name, class_name)}
