@@ -21,14 +21,14 @@ class ProjectManager(object):
         if self.ctx is None:
             raise Exception("No JEB context available")
     
-    def get_current_project(self):
+    def _get_current_project(self):
         """Get the current main project from JEB context"""
         self._validate_ctx()
         return self.ctx.getMainProject()
 
     def get_live_artifacts(self):
         """Get a list of live artifacts from JEB context"""
-        prj =  self.get_current_project()
+        prj = self._get_current_project()
         if prj is None:
             raise Exception("No JEB project available")
         
@@ -37,34 +37,38 @@ class ProjectManager(object):
     def get_current_artifact(self):
         """Get the current artifact from JEB context"""
         if self.active_artifact is not None:
-            return self.active_artifact
+            return self.active_artifact, None
             
         artifacts = self.get_live_artifacts()
         if not artifacts or len(artifacts) == 0:
-            raise Exception("No JEB artifact available")
+            return None, {"success": False, "error": "No JEB artifacts available"}
         
         auto_selected = [x for x in artifacts if x.getMainUnit().getFormatType() == "apk"]
         if not auto_selected or len(auto_selected) == 0:
-            raise Exception("No APK artifact available")
+            return None, {"success": False, "error": "No APK artifact available"}
         
         self.active_artifact = auto_selected[0]
-        return self.active_artifact
+        return self.active_artifact, None
     
     def get_current_apk_unit(self):
         """Get the current DEX unit from JEB context"""
-        artifact = self.get_current_artifact()
+        artifact, err = self.get_current_artifact()
+        if err: return None, err
+        
         if artifact is None:
-            return None
+            return None, {"success": False, "error": "No JEB artifact available" }
         mainUnit = artifact.getMainUnit()
         if mainUnit.getFormatType() == "apk":
-            return mainUnit.getDex()
-        return None
+            return mainUnit.getDex(), None
+        return None, {"success": False, "error": "Current artifact is not an APK unit" }
     def get_current_dex_unit(self):
         """Get the current DEX unit from JEB context"""
-        apkUnit = self.get_current_apk_unit()
+        apkUnit, err = self.get_current_apk_unit()
+        if err is not None:
+            return None, err
         if apkUnit is None:
-            return None
-        return apkUnit
+            return None, {"success": False, "error": "No APK unit available" }
+        return apkUnit, None
 
     def find_apk_unit(self, project):
         """Find APK unit in the given project"""
@@ -204,7 +208,7 @@ class ProjectManager(object):
 
     def switch_active_artifact(self, artifact_id):
         """Switch the active artifact in JEB"""
-        prj = self.get_current_project()
+        prj = self._get_current_project()
         if prj is None:
             return False
         
