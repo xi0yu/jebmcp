@@ -35,46 +35,29 @@ class JSONRPCError(Exception):
 
 class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     """HTTP request handler for JSON-RPC calls"""
-    
+
     def __init__(self, *args, **kwargs):
-        self.rpc_handler = kwargs.pop('rpc_handler', None)
+        # 从Server传入的rpc_handler实例
+        self.rpc_handler = JSONRPCHandler.instance if hasattr(JSONRPCHandler, 'instance') else None
         BaseHTTPServer.BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
-    
-    def send_jsonrpc_error(self, code, message, id=None):
-        """Send JSON-RPC error response"""
-        response = {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": code,
-                "message": message
-            }
-        }
-        if id is not None:
-            response["id"] = id
-        response_body = json.dumps(response)
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(response_body.encode('utf-8'))))
-        self.end_headers()
-        self.wfile.write(response_body)
 
     def do_POST(self):
         """Handle POST requests for JSON-RPC calls"""
-        parsed_path = urlparse(self.path)
-        if parsed_path.path != "/mcp":
-            self.send_jsonrpc_error(-32098, "Invalid endpoint", None)
+        # 直接检查路径
+        if self.path != "/mcp":
+            self._send_error_response(-32098, "Invalid endpoint")
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length == 0:
-            self.send_jsonrpc_error(-32700, "Parse error: missing request body", None)
+            self._send_error_response(-32700, "Parse error: missing request body")
             return
 
         request_body = self.rfile.read(content_length)
         try:
             request = json.loads(request_body)
         except ValueError:
-            self.send_jsonrpc_error(-32700, "Parse error: invalid JSON", None)
+            self._send_error_response(-32700, "Parse error: invalid JSON")
             return
 
         # Prepare the response
@@ -96,7 +79,7 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             # Handle the method call through our RPC handler
             if self.rpc_handler:
                 result = self.rpc_handler.handle_request(
-                    request["method"], 
+                    request["method"],
                     request.get("params", [])
                 )
                 response["result"] = result
@@ -130,11 +113,30 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 }
             })
 
+        # 直接发送响应
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(response_body))
+        self.send_header("Content-Length", str(len(response_body)))
         self.end_headers()
-        self.wfile.write(response_body)
+        self.wfile.write(response_body.encode('utf-8'))
+
+    def _send_error_response(self, code, message, request_id=None):
+        """Send JSON-RPC error response"""
+        response = {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": message
+            }
+        }
+        if request_id is not None:
+            response["id"] = request_id
+        response_body = json.dumps(response)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_body.encode('utf-8'))))
+        self.end_headers()
+        self.wfile.write(response_body.encode('utf-8'))
 
     def log_message(self, format, *args):
         """Suppress logging"""
@@ -142,7 +144,7 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class MCPHTTPServer(BaseHTTPServer.HTTPServer):
     """Custom HTTP server for MCP"""
-    allow_reuse_address = False
+    # 保持默认配置，allow_reuse_address 默认为 False
 
 class Server(object):
     """MCP HTTP server manager"""
@@ -186,9 +188,10 @@ class Server(object):
     def _run_server(self):
         """Internal server run method"""
         try:
+            # 设置rpc_handler为类属性，这样所有请求处理实例都能访问
+            JSONRPCHandler.instance = self.rpc_handler
             # Create server with custom request handler
-            handler = lambda *args, **kwargs: JSONRPCRequestHandler(*args, rpc_handler=self.rpc_handler, **kwargs)
-            self.server = MCPHTTPServer((Server.HOST, Server.PORT), handler)
+            self.server = MCPHTTPServer((Server.HOST, Server.PORT), JSONRPCRequestHandler)
             print("[MCP] Server started at http://{0}:{1}".format(Server.HOST, Server.PORT))
             self.server.serve_forever()
         except OSError as e:

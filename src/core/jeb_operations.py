@@ -239,30 +239,30 @@ class JebOperations(object):
         """Set the name of a method in the specified class"""
         if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
-        
+
         try:
             dexUnit, err = self.project_manager.get_current_dex_unit()
             if err: return err
-            
+
             # Find method by name in the class
             is_renamed = False
             new_name = self._extract_last_segment(new_name)
             finded_method = self._find_method(dexUnit, class_name, method_name)
             if finded_method:
-                if keep_prefix and not new_name.startswith(method.getName() + "_"):
-                    new_name = method.getName() + "_" + new_name
-                is_renamed = method.setName(new_name)
-            
+                if keep_prefix and not new_name.startswith(finded_method.getName() + "_"):
+                    new_name = finded_method.getName() + "_" + new_name
+                is_renamed = finded_method.setName(new_name)
+
             if not is_renamed:
                 return {"success": False, "error": "Rename failed for method '%s' in class %s" % (method_name, class_name)}
-            
+
             return {
                 "success": True,
                 "class_name": class_name,
                 "new_method_name": new_name,
                 "message": "Method rename successfully"
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -405,11 +405,17 @@ class JebOperations(object):
     def get_current_project_info(self):
         """Get detailed status information about JEB and loaded projects"""
         try:
+            if self.ctx is None:
+                return {
+                    "success": False,
+                    "error": "JEB context is not available"
+                }
+
             jeb_version = self.ctx.getSoftwareVersion().toString()
-            
+
             current_artifact, err = self.project_manager.get_current_artifact()
             if err: return err
-    
+
             current_artifact_id = current_artifact.getMainUnit().getName() if current_artifact else "N/A"
             return {
                 "success": True,
@@ -417,7 +423,7 @@ class JebOperations(object):
                 "project_info": self.project_manager.get_project_details(),
                 "jeb_version": jeb_version
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -650,7 +656,7 @@ class JebOperations(object):
         """
         Check if the specified method has been renamed in the current project.
         """
-        try: 
+        try:
             dexUnit, err = self.project_manager.get_current_dex_unit()
             if err: return err
 
@@ -658,14 +664,14 @@ class JebOperations(object):
             if dex_class is None:
                 return {"success": False, "error": "Class not found: %s" % class_signature}
 
-            
+
             for method in dex_class.getMethods():
                 if method_signature in method.getSignature(True):
                     return {
                         "success": True,
                         "renamed": method.isRenamed()
                     }
-            
+
             return {"success": False, "error": "Method not found: %s" % method_signature}
         except Exception as e:
             return {

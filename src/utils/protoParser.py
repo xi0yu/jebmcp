@@ -109,11 +109,24 @@ class ProtoParser(object):
     
     def _parse_proto(self, cls):
         """解析protobuf定义"""
-        for method in cls.getMethods():
-            if method.getName() == "<init>" or method.getName() == "<clinit>": 
+        if cls is None:
+            raise Exception("Class is None")
+
+        methods = cls.getMethods()
+        if methods is None:
+            raise Exception("No methods found in class")
+
+        for method in methods:
+            if method is None:
                 continue
-            codeItem = method.getData().getCodeItem()
-            
+            if method.getName() == "<init>" or method.getName() == "<clinit>":
+                continue
+
+            method_data = method.getData()
+            if method_data is None:
+                continue
+            codeItem = method_data.getCodeItem()
+
             objs = {}
             messageinfo = ""
             objkeys = []
@@ -122,77 +135,130 @@ class ProtoParser(object):
             constRegsComplete = False
             if isinstance(codeItem, IDexCodeItem):
                 instructions = codeItem.getInstructions()
+                if instructions is None:
+                    continue
                 for firststr, ins in enumerate(instructions):
+                    if ins is None:
+                        continue
                     if ins.getMnemonic() == "const/4":
-                        if not constRegsComplete: 
-                            constRegs[ins.getOperand(0).getValue()] = ins.getOperand(1).getValue()
+                        if not constRegsComplete:
+                            operand0 = ins.getOperand(0)
+                            operand1 = ins.getOperand(1)
+                            if operand0 is not None and operand1 is not None:
+                                constRegs[operand0.getValue()] = operand1.getValue()
                         continue
                     if "if-eq" == ins.getMnemonic():
-                        if constRegs[ins.getOperand(1).getValue()] == 2:
-                            constRegsComplete = True
-                            continue
+                        operand1 = ins.getOperand(1)
+                        if operand1 is not None:
+                            try:
+                                if constRegs.get(ins.getOperand(0).getValue(), 0) == 2:
+                                    constRegsComplete = True
+                                    continue
+                            except:
+                                continue
                     if ins.getMnemonic() == "const-string":
                         break
-                
-                if firststr == len(instructions) - 1: 
+
+                if firststr == len(instructions) - 1:
                     continue  # incorrect method!
                 objcomplete = False
                 while True:
+                    if firststr >= len(instructions):
+                        break
                     ins = instructions[firststr]
                     firststr += 1
+                    if ins is None:
+                        continue
                     if ins.getMnemonic() == "const-string":
-                        conststr = self.dex_unit.getString(ins.getOperand(1).getValue()).getValue()
-                        if "\x01" in conststr or "\x02" in conststr or "\x03" in conststr or "\x00" in conststr:
-                            messageinfo = conststr
-                        else:
-                            if not objcomplete: 
-                                objs[ins.getOperand(0).getValue()] = conststr
+                        string_index = ins.getOperand(1)
+                        if string_index is not None:
+                            string_obj = self.dex_unit.getString(string_index.getValue())
+                            if string_obj is not None:
+                                conststr = string_obj.getValue()
+                                if conststr is not None:
+                                    if "\x01" in conststr or "\x02" in conststr or "\x03" in conststr or "\x00" in conststr:
+                                        messageinfo = conststr
+                                    else:
+                                        if not objcomplete:
+                                            operand0 = ins.getOperand(0)
+                                            if operand0 is not None:
+                                                objs[operand0.getValue()] = conststr
                         continue
                     if ins.getMnemonic() == "const-class":
-                        if not objcomplete: 
-                            objs[ins.getOperand(0).getValue()] = self.dex_unit.getType(ins.getOperand(1).getValue()).getAddress()[1:-1]
+                        if not objcomplete:
+                            type_index = ins.getOperand(1)
+                            if type_index is not None:
+                                type_obj = self.dex_unit.getType(type_index.getValue())
+                                if type_obj is not None and type_obj.getAddress() is not None:
+                                    address = type_obj.getAddress()
+                                    if len(address) > 2:  # Ensure valid address format
+                                        objs[ins.getOperand(0).getValue()] = address[1:-1]
                         continue
                     if "const/" in ins.getMnemonic():
-                        objs[ins.getOperand(0).getValue()] = ins.getOperand(1).getValue()
+                        operand0 = ins.getOperand(0)
+                        operand1 = ins.getOperand(1)
+                        if operand0 is not None and operand1 is not None:
+                            objs[operand0.getValue()] = operand1.getValue()
                         continue
                     if ins.getMnemonic() == "sget-object":
-                        if not objcomplete: 
-                            objs[ins.getOperand(0).getValue()] = "enum.type"
+                        if not objcomplete:
+                            operand0 = ins.getOperand(0)
+                            if operand0 is not None:
+                                objs[operand0.getValue()] = "enum.type"
                         continue
                     if "move-object" in ins.getMnemonic():
-                        if not objcomplete: 
-                            objs[ins.getOperand(0).getValue()] = objs[ins.getOperand(1).getValue()]
+                        if not objcomplete:
+                            operand0 = ins.getOperand(0)
+                            operand1 = ins.getOperand(1)
+                            if operand0 is not None and operand1 is not None:
+                                src_val = operand1.getValue()
+                                if src_val in objs:
+                                    objs[operand0.getValue()] = objs[src_val]
                         continue
                     if "filled-new-array" in ins.getMnemonic():
                         if "range" in ins.getMnemonic():
                             objkeys = sorted(objs.keys())
-                        else: 
-                            objkeys = [item.getValue() for item in ins.getOperands()[1:]]
+                        else:
+                            operands = ins.getOperands()
+                            if operands:
+                                objkeys = [item.getValue() for item in operands[1:] if item is not None]
                         objcomplete = True
                         continue
                     if "aput-object" == ins.getMnemonic():
-                        key = ins.getOperand(2).getValue()
-                        key = objs[key] if key in objs else constRegs[key]
-                        aputobjs[key] = objs[ins.getOperand(0).getValue()]
+                        operand0 = ins.getOperand(0)
+                        operand2 = ins.getOperand(2)
+                        if operand0 is not None and operand2 is not None:
+                            key = operand2.getValue()
+                            if key in objs:
+                                key = objs[key]
+                            elif key in constRegs:
+                                key = constRegs[key]
+                            else:
+                                continue
+                            src_val = operand0.getValue()
+                            if src_val in objs:
+                                aputobjs[key] = objs[src_val]
                         continue
                     if "move-result" in ins.getMnemonic():
-                        objs[ins.getOperand(0).getValue()] = "enum.type"
+                        operand0 = ins.getOperand(0)
+                        if operand0 is not None:
+                            objs[operand0.getValue()] = "enum.type"
                         continue
                     if firststr >= len(instructions) - 1:
                         break
-                if len(messageinfo) < 2: 
+                if len(messageinfo) < 2:
                     continue
-                else: 
+                else:
                     break
-                    
-        if len(messageinfo) < 2: 
+
+        if len(messageinfo) < 2:
             raise Exception("Unexpected messageinfo!")
-        if len(objs) < 1: 
+        if len(objs) < 1:
             return ""
-        if aputobjs: 
+        if aputobjs:
             objs = aputobjs
             objkeys = sorted(aputobjs.keys())
-        return PBMain.forJeb(self._to_unicode_escape(messageinfo), ''.join(objs[key] + "," for key in objkeys))
+        return PBMain.forJeb(self._to_unicode_escape(messageinfo), ''.join(objs[key] + "," for key in objkeys if key in objs))
     
     def _to_unicode_escape(self, s):
         """转换为Unicode转义序列"""

@@ -5,6 +5,14 @@ JSON-RPC handler module - processes RPC requests and delegates to business logic
 import traceback
 import inspect
 
+class JSONRPCError(Exception):
+    """Custom JSON-RPC error class"""
+    def __init__(self, code, message, data=None):
+        Exception.__init__(self, message)
+        self.code = code
+        self.message = message
+        self.data = data
+
 class JSONRPCHandler(object):
     """Handles JSON-RPC requests and delegates to business logic"""
     
@@ -50,15 +58,19 @@ class JSONRPCHandler(object):
     def _get_jeb_method_signature(self, method_name):
         if not hasattr(self.jeb_operations, method_name):
             return None
-        
+
         jeb_method = getattr(self.jeb_operations, method_name)
-        args, varargs, varkw, defaults = inspect.getargspec(jeb_method)
-        
+        try:
+            args, varargs, varkw, defaults = inspect.getargspec(jeb_method)
+        except TypeError:
+            # For some methods, getargspec might fail, return None
+            return None
+
         if args and args[0] == 'self':
             args = args[1:]
-        
+
         required_count = len(args) - (len(defaults) if defaults else 0)
-        
+
         return {
             'required_params': required_count,
             'total_params': len(args),
@@ -70,26 +82,41 @@ class JSONRPCHandler(object):
         try:
             # 检查方法是否存在
             if method not in self.method_handlers:
-                raise ValueError("Unknown method: {0}".format(method))
-            
+                raise JSONRPCError(-32601, "Method not found: {0}".format(method))
+
             # 自动参数验证（基于JEB操作方法的签名）
             sig_info = self._get_jeb_method_signature(method)
             if sig_info:
                 if len(params) < sig_info['required_params']:
-                    raise ValueError("{0} requires at least {1} parameter(s), got {2}".format(
-                        method, sig_info['required_params'], len(params)))
+                    raise JSONRPCError(-32602,
+                        "{0} requires at least {1} parameter(s), got {2}".format(
+                            method, sig_info['required_params'], len(params)))
                 if len(params) > sig_info['total_params']:
-                    raise ValueError("{0} accepts at most {1} parameter(s), got {2}".format(
-                        method, sig_info['total_params'], len(params)))
-            
+                    raise JSONRPCError(-32602,
+                        "{0} accepts at most {1} parameter(s), got {2}".format(
+                            method, sig_info['total_params'], len(params)))
+
             # 直接调用方法，使用*params展开参数列表
             handler = self.method_handlers[method]
             if method == "ping":
-                return handler(params)  # ping方法特殊处理，接收params参数
+                result = handler(params)  # ping方法特殊处理，接收params参数
             else:
-                return handler(*params)  # 其他方法直接展开参数
-            
+                result = handler(*params)  # 其他方法直接展开参数
+
+            # 检查返回结果是否为旧格式错误（包含error字段但不是JSON-RPC错误格式）
+            if isinstance(result, dict) and 'error' in result and 'success' in result:
+                # 这是旧格式错误，转换为JSON-RPC 2.0标准格式
+                success = result.get('success')
+                if not success:
+                    error_msg = result.get('error', 'Unknown error')
+                    raise JSONRPCError(-32603, str(error_msg))
+
+            return result
+
+        except JSONRPCError:
+            # 重新抛出JSON-RPC错误，让上层处理
+            raise
         except Exception as e:
             print(u"Error handling {0}: {1}".format(method, str(e)))
             traceback.print_exc()
-            raise
+            raise JSONRPCError(-32603, "Internal error: {0}".format(str(e)))

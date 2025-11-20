@@ -54,12 +54,17 @@ class ProjectManager(object):
         """Get the current DEX unit from JEB context"""
         artifact, err = self.get_current_artifact()
         if err: return None, err
-        
+
         if artifact is None:
             return None, {"success": False, "error": "No JEB artifact available" }
         mainUnit = artifact.getMainUnit()
+        if mainUnit is None:
+            return None, {"success": False, "error": "No main unit available in artifact" }
         if mainUnit.getFormatType() == "apk":
-            return mainUnit.getDex(), None
+            apk_unit = mainUnit.getDex()
+            if apk_unit is None:
+                return None, {"success": False, "error": "No DEX unit found in APK" }
+            return apk_unit, None
         return None, {"success": False, "error": "Current artifact is not an APK unit" }
     def get_current_dex_unit(self):
         """Get the current DEX unit from JEB context"""

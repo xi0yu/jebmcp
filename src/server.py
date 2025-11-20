@@ -11,55 +11,115 @@ import http.client
 from fastmcp import FastMCP
 
 mcp = FastMCP()
+class ConnectionPool:
+    """HTTP连接池，用于复用连接，提高性能"""
+    def __init__(self):
+        self._connections = {}
+        self._lock = threading.Lock()
 
-def make_jsonrpc_request(method, *params, jeb_host="127.0.0.1", jeb_port=16161, jeb_path="/mcp"):
+    def get_connection(self, host: str, port: int, timeout: int = 30):
+        """获取连接，如果不存在则创建"""
+        key = f"{host}:{port}"
+        with self._lock:
+            if key not in self._connections:
+                self._connections[key] = http.client.HTTPConnection(host, port, timeout=timeout)
+            return self._connections[key]
+_connection_pool = ConnectionPool()
+
+def make_jsonrpc_request(
+    method: str,
+    *params: Any,
+    jeb_host: str = "127.0.0.1",
+    jeb_port: int = 16161,
+    jeb_path: str = "/mcp",
+    timeout: int = 30
+) -> str:
     """
     转发到本地 JEB 插件的 JSON-RPC 接口 (默认 http://127.0.0.1:16161/mcp)
+    统一处理所有异常，确保返回字符串结果
     """
-    conn = http.client.HTTPConnection(jeb_host, jeb_port, timeout=30)
-    request = {
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": list(params),
-        "id": str(uuid.uuid4()),
-    }
-
     try:
-        conn.request("POST", jeb_path, json.dumps(request), {
-            "Content-Type": "application/json"
-        })
-        response = conn.getresponse()
-        data = json.loads(response.read().decode("UTF-8"))
+        # 验证方法名
+        if not isinstance(method, str) or not method.strip():
+            return json.dumps({"error": "Invalid method name"})
 
-        if "error" in data:
-            err = data["error"]
-            
-            if isinstance(err, dict):
-                code = err.get("code")
-                message = err.get("message")
-                pretty = "JSON-RPC error {}: {}".format(code, message)
-                if "data" in err:
-                    pretty += "\n" + err["data"]
+        # 验证参数是否可序列化（支持所有JSON兼容类型）
+        json_params = list(params)
+        try:
+            json.dumps(json_params)  # 验证参数可序列化
+        except (TypeError, ValueError) as e:
+            return json.dumps({"error": f"Parameter validation failed: {str(e)}"})
+
+        request = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": json_params,
+            "id": str(uuid.uuid4()),
+        }
+
+        # 创建HTTP连接
+        conn = http.client.HTTPConnection(jeb_host, jeb_port, timeout=timeout)
+
+        try:
+            conn.request("POST", jeb_path, json.dumps(request), {
+                "Content-Type": "application/json"
+            })
+
+            response = conn.getresponse()
+            response_data = response.read()
+
+            # 验证HTTP状态
+            if response.status != 200:
+                return json.dumps({
+                    "error": f"HTTP {response.status}: {response.reason}"
+                })
+
+            # 解析响应
+            try:
+                data = json.loads(response_data.decode("UTF-8"))
+            except UnicodeDecodeError:
+                return json.dumps({"error": "Invalid response encoding"})
+            except json.JSONDecodeError:
+                return json.dumps({"error": "Invalid JSON response"})
+
+            # 检查JSON-RPC错误
+            if "error" in data:
+                err = data["error"]
+                if isinstance(err, dict):
+                    code = err.get("code", "unknown")
+                    message = err.get("message", "unknown error")
+                    return json.dumps({"error": f"JSON-RPC error {code}: {message}"})
+                else:
+                    return json.dumps({"error": f"JSON-RPC error: {str(err)}"})
+
+            # 返回结果 - 保持原始格式，但确保可序列化
+            result = data.get("result")
+            if result is None:
+                return json.dumps({"result": "success"})
             else:
-                pretty = str(err)
-            raise RuntimeError(
-                "Exception during JSON-RPC request '{}': {}\nHint: Please update MCP plugin from GitHub to avoid API mismatches.".format(
-                    method, pretty
-                )
-            )
+                try:
+                    # 尝试直接序列化结果
+                    return json.dumps({"result": result})
+                except (TypeError, ValueError):
+                    # 如果不能序列化，转换为字符串
+                    return json.dumps({"result": str(result)})
 
-        result = data.get("result")
-        return "success" if result is None else result
-    
+        finally:
+            conn.close()
+
+    except http.client.HTTPException as e:
+        return json.dumps({"error": f"HTTP error: {str(e)}"})
+    except ConnectionRefusedError:
+        return json.dumps({"error": f"Connection refused to {jeb_host}:{jeb_port}"})
+    except socket.timeout:
+        return json.dumps({"error": f"Request timeout after {timeout}s"})
+    except OSError as e:
+        return json.dumps({"error": f"Network error: {str(e)}"})
     except Exception as e:
-        raise RuntimeError(
-            "Exception during JSON-RPC request '{}': {}\nHint: Please update MCP plugin from GitHub to avoid API mismatches.".format(method, e)
-        )
-    finally:
-        conn.close()
-
-# 通过一个统一的“调用包装器”把 CLI 参数里的 JEB 地址带进每个 tool
-def _jeb_call(method, *params):
+        return json.dumps({"error": f"Unexpected error: {str(e)}"})
+        
+def _jeb_call(method, *params) -> str:
+    """统一的JEB调用函数，确保始终返回字符串"""
     return make_jsonrpc_request(
         method, *params,
         jeb_host=os.environ.get("JEB_HOST", "127.0.0.1"),
@@ -79,11 +139,7 @@ def load_jeb_project(apk_or_dex_path: str):
     This function loads the specified APK/DEX in JEB, updates the project manager
     context to work with the new project, and returns project information.
     """
-    try:
-        result = _jeb_call('load_project', apk_or_dex_path)
-        return result
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    return _jeb_call('load_project', apk_or_dex_path)
 
 
 @mcp.tool()
@@ -138,12 +194,7 @@ def get_method_smali_code(class_signature: str, method_name: str):
 def ping():
     """
     Do a simple ping to check server is alive and running"""
-    try:
-        _ = _jeb_call("ping")
-        return "Successfully connected to JEB Pro"
-    except Exception:
-        shortcut = "Ctrl+Option+M" if sys.platform == "darwin" else "Ctrl+Alt+M"
-        return f"Failed to connect to JEB Pro! Did you run Edit -> Scripts -> MCP ({shortcut}) to start the server?"
+    return _jeb_call("ping")
 
 @mcp.tool()
 def get_current_app_manifest():
@@ -317,7 +368,7 @@ def parse_protobuf_class(class_signature: str):
 
     @param class_signature: Class identifier in any of the supported forms
     """
-    return make_jsonrpc_request('parse_protobuf_class', class_signature)
+    return _jeb_call('parse_protobuf_class', class_signature)
 
 @mcp.tool()
 def get_class_methods(class_signature: str):
@@ -400,7 +451,7 @@ def set_parameter_name(class_signature: str, method_name: str, index: int, name:
     @param notify: If True, listeners are notified if the name changes
     @return: Boolean indicating whether the name was effectively changed
     """
-    return make_jsonrpc_request('set_parameter_name', class_signature, method_name, index, name, fail_on_conflict, notify)
+    return _jeb_call('set_parameter_name', class_signature, method_name, index, name, fail_on_conflict, notify)
 
 @mcp.tool()
 def reset_parameter_name(class_signature: str, method_name: str, index: int, notify: bool = True):
@@ -413,7 +464,7 @@ def reset_parameter_name(class_signature: str, method_name: str, index: int, not
     @param notify: If True, listeners are notified if the name changes
     @return: Boolean indicating whether the name was effectively reset
     """
-    return make_jsonrpc_request('set_parameter_name', class_signature, method_name, index, None, False, notify)
+    return _jeb_call('set_parameter_name', class_signature, method_name, index, None, False, notify)
 
 
 @mcp.tool()
