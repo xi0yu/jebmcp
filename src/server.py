@@ -7,6 +7,7 @@ import uuid
 import shutil
 import argparse
 import http.client
+import threading
 
 from fastmcp import FastMCP
 
@@ -28,7 +29,7 @@ _connection_pool = ConnectionPool()
 
 def make_jsonrpc_request(
     method: str,
-    *params: Any,
+    *params: any,
     jeb_host: str = "127.0.0.1",
     jeb_port: int = 16161,
     jeb_path: str = "/mcp",
