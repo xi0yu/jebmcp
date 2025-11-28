@@ -274,9 +274,9 @@ def rename_class_name(class_name: str, new_name: str, ignore: bool=True):
         - JNI format, e.g. Lcom/example/MyClass;
         - Java format, e.g. com.example.MyClass
     @param new_name: Optional new class name
-    @param keep_prefix: Optional flag to keep the original class name prefix
+    @param ignore: Optional flag to keep the original class name prefix
     """
-    return _jeb_call('rename_class_name', class_name, new_name, keep_prefix)
+    return _jeb_call('rename_class_name', class_name, new_name, ignore)
 
 @mcp.tool()
 def rename_method_name(class_name: str, method_name: str, new_name: str, ignore: bool=True):
@@ -291,9 +291,9 @@ def rename_method_name(class_name: str, method_name: str, new_name: str, ignore:
         - Java format, e.g. com.example.MyClass
     @param method_name: Original name of the method to rename
     @param new_name: New method name to set (required)
-    @param keep_prefix: Optional flag to keep the original method name prefix
+    @param ignore: Optional flag to keep the original method name prefix
     """
-    return _jeb_call('rename_method_name', class_name, method_name, new_name, keep_prefix)
+    return _jeb_call('rename_method_name', class_name, method_name, new_name, ignore)
 
 @mcp.tool()
 def rename_field_name(class_name: str, field_name: str, new_name: str, ignore: bool=True):
@@ -308,9 +308,9 @@ def rename_field_name(class_name: str, field_name: str, new_name: str, ignore: b
         - Java format, e.g. com.example.MyClass
     @param field_name: Original name of the field to rename
     @param new_name: New field name to set (required)
-    @param keep_prefix: Optional flag to keep the original field name prefix
+    @param ignore: Optional flag to keep the original field name prefix
     """
-    return _jeb_call('rename_field_name', class_name, field_name, new_name, keep_prefix)
+    return _jeb_call('rename_field_name', class_name, field_name, new_name, ignore)
 
 @mcp.tool()
 def get_class_type_tree(class_signature: str, max_node_count: int=16):
