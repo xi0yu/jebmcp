@@ -130,7 +130,7 @@ class JebOperations(object):
     def get_method_callers(self, class_signature, method_name):
         """Get the callers of the given method in the currently loaded APK project"""
         if not class_signature or not method_name:
-            return {"success": False, "error": "Both class name and method name are required"}
+            return {"success": False, "error": "Both class_signature and method_name are required"}
 
         dexUnit, err = self.project_manager.get_current_dex_unit()
         if err: return err
@@ -151,7 +151,7 @@ class JebOperations(object):
     def get_field_callers(self, class_signature, field_name):
         """Get the callers/references of the given field in the currently loaded APK project"""
         if not class_signature or not field_name:
-            return {"success": False, "error": "Both class signature and method name are required"}
+            return {"success": False, "error": "Both class_signature and field_name are required"}
         
         dexUnit, err = self.project_manager.get_current_dex_unit()
         if err: return err
@@ -181,7 +181,7 @@ class JebOperations(object):
     def get_method_overrides(self, method_signature):
         """Get the overrides of the given method in the currently loaded APK project"""
         if not method_signature:
-            return {"success": False, "error": "Method signature is required"}
+            return {"success": False, "error": "method_signature is required"}
         
         dexUnit, err = self.project_manager.get_current_dex_unit()
         if err: return err
@@ -198,10 +198,10 @@ class JebOperations(object):
                 ret.append((data.getAddresses()[i], data.getDetails()[i]))
         return {"success": True, "method_signature": method_signature, "overrides": ret}
     
-    def rename_class_name(self, class_name, new_name, keep_prefix):
+    def rename_class_name(self, class_name, new_name, ignore):
         """Set the name of a class in the current APK project"""
-        if not class_name:
-            return {"success": False, "error": "class name is required"}
+        if not class_name or not new_name:
+            return {"success": False, "error": "Boat class_name and new_name is required"}
         
         try:            
             dexUnit, err = self.project_manager.get_current_dex_unit()
@@ -212,9 +212,11 @@ class JebOperations(object):
             if dex_class is None:
                 return {"success": False, "error": "Class not found: %s" % class_name}
             
+            old_name = dex_class.getName(True)
             new_name = self._extract_last_segment(new_name)
-            if keep_prefix and not new_name.startswith(dex_class.getName() + "_"):
-                new_name = dex_class.getName() + "_" + new_name
+
+            if old_name == new_name:
+                return {"success": True, "message": "Class name already set to %s" % new_name}
 
             if not dex_class.setName(new_name):
                 return  {"success": False, "error": "Failed to set class name: %s" % new_name}
@@ -222,7 +224,7 @@ class JebOperations(object):
             return {
                 "success": True, 
                 "new_class_name": new_name,
-                "message": "Class name retrieved successfully"
+                "message": "Renaming succeeded"
             }
         except Exception as e:
             return {
@@ -235,7 +237,7 @@ class JebOperations(object):
                 "traceback": traceback.format_exc()
             }
     
-    def rename_method_name(self, class_name, method_name, new_name, keep_prefix):
+    def rename_method_name(self, class_name, method_name, new_name, ignore):
         """Set the name of a method in the specified class"""
         if not class_name or not method_name:
             return {"success": False, "error": "Both class signature and method name are required"}
@@ -245,22 +247,24 @@ class JebOperations(object):
             if err: return err
 
             # Find method by name in the class
-            is_renamed = False
-            new_name = self._extract_last_segment(new_name)
             finded_method = self._find_method(dexUnit, class_name, method_name)
-            if finded_method:
-                if keep_prefix and not new_name.startswith(finded_method.getName() + "_"):
-                    new_name = finded_method.getName() + "_" + new_name
-                is_renamed = finded_method.setName(new_name)
+            if not finded_method:
+                return {"success": False, "error": "Method not found: %s" % method_name}
+            
+            old_name = finded_method.getName(True)
+            new_name = self._extract_last_segment(new_name)
 
-            if not is_renamed:
+            if old_name == new_name:
+                return {"success": True, "message": "Method name already set to %s" % new_name}
+
+            if not finded_method.setName(new_name):
                 return {"success": False, "error": "Rename failed for method '%s' in class %s" % (method_name, class_name)}
 
             return {
                 "success": True,
                 "class_name": class_name,
                 "new_method_name": new_name,
-                "message": "Method rename successfully"
+                "message": "Renaming succeeded"
             }
 
         except Exception as e:
@@ -274,7 +278,7 @@ class JebOperations(object):
                 "traceback": traceback.format_exc()
             }
     
-    def rename_field_name(self, class_name, field_name, new_name, keep_prefix):
+    def rename_field_name(self, class_name, field_name, new_name, ignore):
         """Set the name of a field in the specified class"""
         if not class_name or not field_name:
             return {"success": False, "error": "Both class signature and field name are required"}
@@ -292,15 +296,17 @@ class JebOperations(object):
                 return {"success": False, "error": "Class not found: %s" % class_name}
             
             # Find field by name in the class
-            is_renamed = False
-            new_name = self._extract_last_segment(new_name)
             finded_field = self._find_field(dexUnit, class_name, field_name)
-            if finded_field:                
-                if keep_prefix and not new_name.startswith(finded_field.getName() + "_"):
-                    new_name = finded_field.getName() + "_" + new_name
-                is_renamed = finded_field.setName(new_name)
+            if not finded_field:
+                return {"success": False, "error": "Field not found: %s" % field_name}
 
-            if not is_renamed:
+            old_name = finded_field.getName(True)
+            new_name = self._extract_last_segment(new_name)
+
+            if old_name == new_name:
+                return {"success": True, "message": "Field name already set to %s" % new_name}
+
+            if not finded_field.setName(new_name):
                 return {"success": False, "error": "Rename failed for field '%s' in class %s" % (field_name, class_name)}
             
             return {
@@ -457,7 +463,14 @@ class JebOperations(object):
                 "superclass": dex_class.getSupertypeSignature(True)
             }
         except Exception as e:
-            return {"error": "Failed to get superclass: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
     def get_class_interfaces(self, class_signature):
         """Get all interfaces implemented by a given class
@@ -485,7 +498,14 @@ class JebOperations(object):
                 "interfaces": interface_signatures
             }
         except Exception as e:
-            return {"error": "Failed to get class interfaces: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
     def parse_protobuf_class(self, class_signature):
         """解析指定类的protobuf定义"""
@@ -503,7 +523,14 @@ class JebOperations(object):
             return result
 
         except Exception as e:
-            return {"success": False, "error": "Failed to parse protobuf class: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
     def get_class_methods(self, class_signature):
         """Get all methods of a given class
@@ -548,7 +575,14 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to get class methods: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
     def get_class_fields(self, class_signature):
         """Get all fields of a given class
@@ -596,7 +630,14 @@ class JebOperations(object):
             }
             
         except Exception as e:
-            return {"success": False, "error": "Failed to get class fields: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
 
     def load_project(self, file_path):
         """Open a new project from file path
@@ -619,7 +660,14 @@ class JebOperations(object):
         try:            
             return {"success": True, "projects": self.project_manager.get_project_details()}
         except Exception as e:
-            return {"success": False, "error": "Failed to get projects: %s" % str(e)}
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
     
     def unload_projects(self):
         """Unload all projects from JEB"""
