@@ -99,17 +99,9 @@ class JSONRPCHandler(object):
             # 直接调用方法，使用*params展开参数列表
             handler = self.method_handlers[method]
             if method == "ping":
-                result = handler(params)  # ping方法特殊处理，接收params参数
+                result = handler(params)
             else:
-                result = handler(*params)  # 其他方法直接展开参数
-
-            # 检查返回结果是否为旧格式错误（包含error字段但不是JSON-RPC错误格式）
-            if isinstance(result, dict) and 'error' in result and 'success' in result:
-                # 这是旧格式错误，转换为JSON-RPC 2.0标准格式
-                success = result.get('success')
-                if not success:
-                    error_msg = result.get('error', 'Unknown error')
-                    raise JSONRPCError(-32603, str(error_msg))
+                result = handler(*params)
 
             return result
 
