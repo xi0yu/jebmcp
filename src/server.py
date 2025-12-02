@@ -86,12 +86,7 @@ def make_jsonrpc_request(
             # 检查JSON-RPC错误
             if "error" in data:
                 err = data["error"]
-                if isinstance(err, dict):
-                    code = err.get("code", "unknown")
-                    message = err.get("message", "unknown error")
-                    return json.dumps({"error": f"JSON-RPC error {code}: {message}"})
-                else:
-                    return json.dumps({"error": f"JSON-RPC error: {str(err)}"})
+                return json.dumps({"result": f"{str(err)}"})
 
             # 返回结果 - 保持原始格式，但确保可序列化
             result = data.get("result")
