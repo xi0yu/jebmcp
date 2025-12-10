@@ -669,6 +669,68 @@ class JebOperations(object):
                 "traceback": traceback.format_exc()
             }
     
+    def get_class_count(self):
+        """Get the number of classes in the current project"""
+        try:
+            dexUnit, err = self.project_manager.get_current_dex_unit()
+            if err: return err
+
+            return {
+                "success": True,
+                "class_count": len(dexUnit.getClasses())
+            }
+        except Exception as e:
+            return {
+                "success": False,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+    
+    def get_class_by_index(self, index):
+        """Get class information by index
+        
+        Args:
+            index (int): Index of the class to retrieve
+            
+        Returns:
+            dict: Contains class information or error details
+        """
+        try:
+            dexUnit, err = self.project_manager.get_current_dex_unit()
+            if err: return err
+
+            index = int(index)
+            if index < 0 or index >= len(dexUnit.getClasses()):
+                return {"success": False, "error": "Index out of range: %d" % index}
+
+            dexClass = dexUnit.getClass(index)
+            if dexClass is None: 
+                return {"success": False, "error": "Class not found, Index of range: %s" % index}
+
+            return {
+                "success": True, 
+                "current_name": dexClass.getName(True),
+                "original_name": dexClass.getName(False),
+                "signature": dexClass.getSignature(True),
+                "renamed": dexClass.isRenamed()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": (
+                    "An unexpected error occurred: {exc}.\n"
+                    "You may try updating JEB or this plugin to the latest version to fix potential API changes."
+                ).format(exc=str(e)),
+                "traceback": traceback.format_exc()
+            }
+    
     def unload_projects(self):
         """Unload all projects from JEB"""
         return self.project_manager.unload_projects()

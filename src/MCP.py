@@ -113,12 +113,24 @@ class JSONRPCRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 }
             })
 
-        # 直接发送响应
+        response_bytes = response_body.encode("utf-8")
+        print("Response size: {} bytes".format(len(response_bytes)))
+        use_gzip = False
+        accept_encoding = self.headers.get("Accept-Encoding", "")
+        if "gzip" in accept_encoding.lower():
+            try:
+                response_bytes = gzip.compress(response_bytes)
+                print("Response size: {} bytes (gzip)".format(len(response_bytes)))
+                use_gzip = True
+            except:
+                pass
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(response_body)))
         self.end_headers()
-        self.wfile.write(response_body.encode('utf-8'))
+        self.wfile.write(response_bytes)
 
     def _send_error_response(self, code, message, request_id=None):
         """Send JSON-RPC error response"""
@@ -297,26 +309,6 @@ class UIThread(Runnable):
         # 显示窗口
         frame.setVisible(True)
         frame.addWindowListener(self.listener)
-# class UIThread(Runnable):
-#     def __init__(self, listener):
-#         self.listener = listener
-
-#     def run(self):
-#         frame = JFrame(u"JEB MCP 服务")
-#         frame.setSize(400, 100)
-#         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
-#         frame.setLocationRelativeTo(None)
-
-        
-#         label = JLabel(u"<html>JEB MCP 服务正在运行<br>关闭窗口将停止服务</html>")
-#         label.setForeground(Color.BLACK)
-#         label.setHorizontalAlignment(JLabel.CENTER)
-#         label.setVerticalAlignment(JLabel.CENTER)
-#         frame.add(label, BorderLayout.CENTER)
-        
-#         frame.setVisible(True)
-
-#         frame.addWindowListener(self.listener)
 
 
 class MCP(IScript):

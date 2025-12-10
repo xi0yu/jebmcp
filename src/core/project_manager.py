@@ -61,16 +61,13 @@ class ProjectManager(object):
         if mainUnit is None:
             return None, {"success": False, "error": "No main unit available in artifact" }
         if mainUnit.getFormatType() == "apk":
-            apk_unit = mainUnit.getDex()
-            if apk_unit is None:
-                return None, {"success": False, "error": "No DEX unit found in APK" }
-            return apk_unit, None
+            return mainUnit, None
         return None, {"success": False, "error": "Current artifact is not an APK unit" }
     def get_current_dex_unit(self):
         """Get the current DEX unit from JEB context"""
         apkUnit, err = self.get_current_apk_unit()
-        if err is not None:
-            return None, err
+        if err: return None, err
+
         if apkUnit is None:
             return None, {"success": False, "error": "No APK unit available" }
         return apkUnit, None

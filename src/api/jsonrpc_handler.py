@@ -50,6 +50,8 @@ class JSONRPCHandler(object):
             "load_project": jeb_operations.load_project,
             "has_projects": jeb_operations.has_projects,
             "get_projects": jeb_operations.get_projects,
+            "get_class_count": jeb_operations.get_class_count,
+            "get_class_by_index": jeb_operations.get_class_by_index,
             "get_live_artifact_ids": jeb_operations.get_live_artifact_ids,
             "switch_active_artifact": jeb_operations.switch_active_artifact,
         }

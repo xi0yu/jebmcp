@@ -2,6 +2,8 @@
 import os
 import sys
 import ast
+import gzip
+import gzip
 import json
 import uuid
 import shutil
@@ -63,21 +65,25 @@ def make_jsonrpc_request(
 
         try:
             conn.request("POST", jeb_path, json.dumps(request), {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept-Encoding": "gzip"
             })
-
             response = conn.getresponse()
-            response_data = response.read()
 
             # 验证HTTP状态
             if response.status != 200:
                 return json.dumps({
                     "error": f"HTTP {response.status}: {response.reason}"
                 })
+            
+            raw_data = response.read()
+            encoding = response.getheader("Content-Encoding")
+            if encoding and "gzip" in encoding.lower():
+                raw_data = gzip.decompress(raw_data)
 
             # 解析响应
             try:
-                data = json.loads(response_data.decode("UTF-8"))
+                data = json.loads(raw_data.decode("UTF-8"))
             except UnicodeDecodeError:
                 return json.dumps({"error": "Invalid response encoding"})
             except json.JSONDecodeError:
@@ -153,6 +159,13 @@ def get_projects():
     """
     return _jeb_call('get_projects')
 
+@mcp.tool()
+def get_class_count():
+    return _jeb_call('get_class_count')
+
+@mcp.tool()
+def get_class_by_index(index: str):
+    return _jeb_call('get_class_by_index', index)
 
 @mcp.tool()
 def get_current_project_info():
