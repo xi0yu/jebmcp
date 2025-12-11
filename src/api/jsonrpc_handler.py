@@ -56,47 +56,12 @@ class JSONRPCHandler(object):
             "switch_active_artifact": jeb_operations.switch_active_artifact,
         }
 
-
-    def _get_jeb_method_signature(self, method_name):
-        if not hasattr(self.jeb_operations, method_name):
-            return None
-
-        jeb_method = getattr(self.jeb_operations, method_name)
-        try:
-            args, varargs, varkw, defaults = inspect.getargspec(jeb_method)
-        except TypeError:
-            # For some methods, getargspec might fail, return None
-            return None
-
-        if args and args[0] == 'self':
-            args = args[1:]
-
-        required_count = len(args) - (len(defaults) if defaults else 0)
-
-        return {
-            'required_params': required_count,
-            'total_params': len(args),
-            'param_names': args
-        }
-    
     def handle_request(self, method, params):
         """Handle JSON-RPC method calls using direct method mapping"""
         try:
             # 检查方法是否存在
             if method not in self.method_handlers:
                 raise JSONRPCError(-32601, "Method not found: {0}".format(method))
-
-            # 自动参数验证（基于JEB操作方法的签名）
-            sig_info = self._get_jeb_method_signature(method)
-            if sig_info:
-                if len(params) < sig_info['required_params']:
-                    raise JSONRPCError(-32602,
-                        "{0} requires at least {1} parameter(s), got {2}".format(
-                            method, sig_info['required_params'], len(params)))
-                if len(params) > sig_info['total_params']:
-                    raise JSONRPCError(-32602,
-                        "{0} accepts at most {1} parameter(s), got {2}".format(
-                            method, sig_info['total_params'], len(params)))
 
             # 直接调用方法，使用*params展开参数列表
             handler = self.method_handlers[method]
