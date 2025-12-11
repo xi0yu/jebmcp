@@ -70,7 +70,7 @@ class ProjectManager(object):
 
         if apkUnit is None:
             return None, {"success": False, "error": "No APK unit available" }
-        return apkUnit, None
+        return apkUnit.getDex(), None
 
     def find_apk_unit(self, project):
         """Find APK unit in the given project"""
