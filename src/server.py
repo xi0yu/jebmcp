@@ -8,10 +8,14 @@ import json
 import uuid
 import shutil
 import argparse
+import socket
 import http.client
 import threading
-
 from fastmcp import FastMCP
+from utils.manifest_parser import (
+    parse_manifest_root, android_attr, extract_attrs,
+    extract_intent_filters, extract_meta_data,
+)
 
 mcp = FastMCP()
 class ConnectionPool:
@@ -129,6 +133,11 @@ def _jeb_call(method, *params) -> str:
         jeb_path=os.environ.get("JEB_PATH", "/mcp"),
     )
 
+def _get_manifest_root():
+    """调用 JEB 获取 manifest XML 并解析为 ElementTree root"""
+    return parse_manifest_root(_jeb_call('get_app_manifest'))
+
+
 # -----------------------------
 #       MCP 工具定义
 # -----------------------------
@@ -206,10 +215,114 @@ def ping():
     return _jeb_call("ping")
 
 @mcp.tool()
-def get_current_app_manifest():
+def get_current_app_manifest(info_type: str):
     """
-    Get the manifest of the currently loaded APK project in JEB"""
-    return _jeb_call('get_app_manifest')
+    Get manifest information of the currently loaded APK project in JEB.
+
+    Use the info_type parameter to request only the data you need, avoiding large context:
+    - "activity"   — all <activity> components (name, exported, intent-filters, meta-data …)
+    - "service"    — all <service> components
+    - "receiver"   — all <receiver> components
+    - "provider"   — all <provider> components
+    - "permission" — uses-permission, custom permissions, permission-group, permission-tree
+    - "info"       — package, versionCode, versionName, SDK, application attrs, features, libraries
+
+    @param info_type: Type of manifest data to retrieve
+    """
+    valid_types = ("activity", "service", "receiver", "provider", "permission", "info")
+    if info_type not in valid_types:
+        return json.dumps({"result": {"success": False,
+            "error": f"info_type must be one of {valid_types}"}})
+
+    root, err = _get_manifest_root()
+    if err:
+        return err
+
+    # ---------- 四大组件 ----------
+    if info_type in ("activity", "service", "receiver", "provider"):
+        app = root.find("application")
+        if app is None:
+            return json.dumps({"result": {"success": True, "component_type": info_type, "count": 0, "components": []}})
+        components = []
+        for elem in app.findall(info_type):
+            comp = extract_attrs(elem)
+            comp["intent_filters"] = extract_intent_filters(elem)
+            comp["meta_data"] = extract_meta_data(elem)
+            components.append(comp)
+        return json.dumps({"result": {
+            "success": True,
+            "component_type": info_type,
+            "count": len(components),
+            "components": components,
+        }})
+
+    # ---------- 权限 ----------
+    if info_type == "permission":
+        uses_permissions = []
+        for elem in root.findall("uses-permission"):
+            name = android_attr(elem, "name")
+            if name:
+                entry = {"name": name}
+                max_sdk = android_attr(elem, "maxSdkVersion")
+                if max_sdk:
+                    entry["maxSdkVersion"] = max_sdk
+                uses_permissions.append(entry)
+
+        custom_permissions = []
+        for elem in root.findall("permission"):
+            custom_permissions.append(extract_attrs(elem))
+
+        permission_groups = []
+        for elem in root.findall("permission-group"):
+            permission_groups.append(extract_attrs(elem))
+
+        permission_trees = []
+        for elem in root.findall("permission-tree"):
+            permission_trees.append(extract_attrs(elem))
+
+        return json.dumps({"result": {
+            "success": True,
+            "uses_permissions": uses_permissions,
+            "custom_permissions": custom_permissions,
+            "permission_groups": permission_groups,
+            "permission_trees": permission_trees,
+        }})
+
+    # ---------- 基本信息 ----------
+    # info_type == "info"
+    package = root.get("package")
+    version_code = android_attr(root, "versionCode")
+    version_name = android_attr(root, "versionName")
+
+    sdk = {}
+    uses_sdk = root.find("uses-sdk")
+    if uses_sdk is not None:
+        for attr in ("minSdkVersion", "targetSdkVersion", "maxSdkVersion"):
+            val = android_attr(uses_sdk, attr)
+            if val:
+                sdk[attr] = val
+
+    application = {}
+    app = root.find("application")
+    if app is not None:
+        application = extract_attrs(app)
+
+    features = [extract_attrs(e) for e in root.findall("uses-feature")]
+
+    libraries = []
+    if app is not None:
+        libraries = [extract_attrs(e) for e in app.findall("uses-library")]
+
+    return json.dumps({"result": {
+        "success": True,
+        "package": package,
+        "versionCode": version_code,
+        "versionName": version_name,
+        "sdk": sdk,
+        "application": application,
+        "features": features,
+        "libraries": libraries,
+    }})
 
 @mcp.tool()
 def get_method_decompiled_code(class_name: str, method_name: str):
