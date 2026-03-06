@@ -35,42 +35,58 @@ class ProjectManager(object):
         return prj.getLiveArtifacts()
 
     def get_current_artifact(self):
-        """Get the current artifact from JEB context"""
+        """Get the current artifact from JEB context (supports APK and DEX formats)"""
         if self.active_artifact is not None:
             return self.active_artifact, None
-            
+
         artifacts = self.get_live_artifacts()
         if not artifacts or len(artifacts) == 0:
             return None, {"success": False, "error": "No JEB artifacts available"}
-        
-        auto_selected = [x for x in artifacts if x.getMainUnit().getFormatType() == "apk"]
+
+        # 支持 APK 和 DEX 两种格式
+        auto_selected = [x for x in artifacts if x.getMainUnit().getFormatType() in ("apk", "dex")]
         if not auto_selected or len(auto_selected) == 0:
-            return None, {"success": False, "error": "No APK artifact available"}
-        
+            return None, {"success": False, "error": "No APK or DEX artifact available"}
+
         self.active_artifact = auto_selected[0]
         return self.active_artifact, None
     
     def get_current_apk_unit(self):
-        """Get the current DEX unit from JEB context"""
+        """Get the current APK unit from JEB context (returns None for DEX-only artifacts)"""
         artifact, err = self.get_current_artifact()
         if err: return None, err
 
         if artifact is None:
-            return None, {"success": False, "error": "No JEB artifact available" }
+            return None, {"success": False, "error": "No JEB artifact available"}
         mainUnit = artifact.getMainUnit()
         if mainUnit is None:
-            return None, {"success": False, "error": "No main unit available in artifact" }
+            return None, {"success": False, "error": "No main unit available in artifact"}
         if mainUnit.getFormatType() == "apk":
             return mainUnit, None
-        return None, {"success": False, "error": "Current artifact is not an APK unit" }
+        # DEX 格式返回 None（不是错误，只是没有 APK unit）
+        return None, None
+
     def get_current_dex_unit(self):
-        """Get the current DEX unit from JEB context"""
-        apkUnit, err = self.get_current_apk_unit()
+        """Get the current DEX unit from JEB context (supports both APK and standalone DEX)"""
+        artifact, err = self.get_current_artifact()
         if err: return None, err
 
-        if apkUnit is None:
-            return None, {"success": False, "error": "No APK unit available" }
-        return apkUnit.getDex(), None
+        if artifact is None:
+            return None, {"success": False, "error": "No JEB artifact available"}
+
+        mainUnit = artifact.getMainUnit()
+        if mainUnit is None:
+            return None, {"success": False, "error": "No main unit available in artifact"}
+
+        format_type = mainUnit.getFormatType()
+        if format_type == "apk":
+            # APK 格式：从 APK unit 获取 DEX
+            return mainUnit.getDex(), None
+        elif format_type == "dex":
+            # DEX 格式：mainUnit 就是 IDexUnit
+            return mainUnit, None
+
+        return None, {"success": False, "error": "Unsupported artifact format: %s" % format_type}
 
     def find_apk_unit(self, project):
         """Find APK unit in the given project"""
@@ -85,45 +101,52 @@ class ProjectManager(object):
         return project.findUnit(IDexUnit)
     
     def get_project_details(self):
-        apk_units = [
+        # 支持 APK 和 DEX 格式
+        units = [
             x.getMainUnit()
             for x in self.get_live_artifacts()
-            if x.getMainUnit().getFormatType() == "apk"
+            if x.getMainUnit().getFormatType() in ("apk", "dex")
         ]
-        if not apk_units:
+        if not units:
             return {
                 "success": False,
-                "error": "No APK unit found in the project"
+                "error": "No APK or DEX unit found in the project"
             }
 
         results = []
+        for unit in units:
+            format_type = unit.getFormatType()
 
-        for apk_unit in apk_units:
-            package_name = apk_unit.getPackageName() or "Unknown"
-            application_class_name = apk_unit.getApplicationName() or "Unknown"
+            if format_type == "apk":
+                # APK 格式的详细信息
+                package_name = unit.getPackageName() or "Unknown"
+                application_class_name = unit.getApplicationName() or "Unknown"
+                activity_count = len(unit.getActivities() or [])
+                service_count = len(unit.getServices() or [])
+                receiver_count = len(unit.getReceivers() or [])
+                provider_count = len(unit.getProviders() or [])
+                permissions = list(unit.getPermissions()) if unit.getPermissions() else []
 
-            activity_count = len(apk_unit.getActivities() or [])
-            service_count = len(apk_unit.getServices() or [])
-            receiver_count = len(apk_unit.getReceivers() or [])
-            provider_count = len(apk_unit.getProviders() or [])
-
-            permissions = apk_unit.getPermissions()
-            permissions = list(permissions) if permissions else []
-
-            results.append({
-                "package_name": package_name,
-                "application_class": application_class_name,
-                "permissions": permissions,
-                "activities": activity_count,
-                "services": service_count,
-                "receivers": receiver_count,
-                "providers": provider_count,
-            })
-
+                results.append({
+                    "format_type": "apk",
+                    "package_name": package_name,
+                    "application_class": application_class_name,
+                    "permissions": permissions,
+                    "activities": activity_count,
+                    "services": service_count,
+                    "receivers": receiver_count,
+                    "providers": provider_count,
+                })
+            else:
+                # DEX 格式的详细信息
+                results.append({
+                    "format_type": "dex",
+                    "name": unit.getName() or "Unknown",
+                })
 
         return {
             "count": len(results),
-            "apk_list": results
+            "artifact_list": results
         }
 
     def load_project(self, file_path):
@@ -170,11 +193,15 @@ class ProjectManager(object):
     def has_projects(self):
         """Check if there are any projects loaded in JEB"""
         try:
-            live_artifact_length = len([ x for x in self.get_live_artifacts() if x.getMainUnit().getFormatType() == "apk"])
+            # 支持 APK 和 DEX 格式
+            live_artifact_length = len([
+                x for x in self.get_live_artifacts()
+                if x.getMainUnit().getFormatType() in ("apk", "dex")
+            ])
             has_projects = live_artifact_length > 0
-            
+
             return {
-                "success": True, 
+                "success": True,
                 "has_projects": has_projects,
                 "project_count": live_artifact_length
             }
@@ -201,11 +228,11 @@ class ProjectManager(object):
             return {"success": False, "error": "Failed to unload projects: %s" % str(e)}
 
     def get_live_artifact_ids(self):
-        """Get a list of live artifact IDs"""
+        """Get a list of live artifact IDs (supports APK and DEX formats)"""
         return [
             x.getMainUnit().getName()
             for x in self.get_live_artifacts()
-            if x.getMainUnit().getFormatType() == "apk"
+            if x.getMainUnit().getFormatType() in ("apk", "dex")
         ] or []
 
     def switch_active_artifact(self, artifact_id):

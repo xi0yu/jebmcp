@@ -1,0 +1,13 @@
+[project]
+name = "jebmcp"
+version = "0.1.0"
+description = "JEB MCP Server - Bridge JEB Decompiler with MCP"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "fastmcp>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
