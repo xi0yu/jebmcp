@@ -738,10 +738,6 @@ class JebOperations(object):
         except Exception as e:
             return {
                 "success": False,
-            }
-        except Exception as e:
-            return {
-                "success": False,
                 "error": (
                     "An unexpected error occurred: {exc}.\n"
                     "You may try updating JEB or this plugin to the latest version to fix potential API changes."

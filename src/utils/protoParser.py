@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+"""
+Protobuf parser module - parses protobuf definitions from DEX files
+Uses PBDecoder.jar for decoding (must be provided separately)
+"""
 
 from com.pnfsoftware.jeb.core.units.code.android import IDexUnit
 from com.pnfsoftware.jeb.core.units.code.android.dex import IDexCodeItem
@@ -8,45 +12,64 @@ import os
 
 # 获取当前脚本所在的目录
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 获取项目根目录（src的上级目录）
+# 获取项目根目录（src 的上级目录）
 project_root = os.path.dirname(os.path.dirname(current_dir))
-jar_path = os.path.join(project_root, "assets", "PBDecoder.jar")
 
-# 检查assets目录是否存在 PBDecoder.jar
-if os.path.exists(jar_path):
-  sys.path.append(jar_path)
+# 查找 PBDecoder.jar 的路径
+jar_path = None
+
+# 1. 首先检查 assets 目录
+assets_jar_path = os.path.join(project_root, "assets", "PBDecoder.jar")
+if os.path.exists(assets_jar_path):
+    jar_path = assets_jar_path
 else:
-  sys.path.append(r"D:\tools\PBDecoder.jar")
+    # 2. 尝试从环境变量读取路径
+    env_jar_path = os.environ.get("PBDECODER_JAR_PATH")
+    if env_jar_path and os.path.exists(env_jar_path):
+        jar_path = env_jar_path
+    else:
+        # 3. 尝试当前工作目录
+        cwd_jar_path = os.path.join(os.getcwd(), "PBDecoder.jar")
+        if os.path.exists(cwd_jar_path):
+            jar_path = cwd_jar_path
+
+# 如果找到 jar 包，添加到路径
+if jar_path:
+    print("[ProtoParser] Using PBDecoder.jar: " + jar_path)
+    sys.path.append(jar_path)
+else:
+    print("[ProtoParser] Warning: PBDecoder.jar not found. Protobuf parsing will fail.")
 
 System.setProperty("python.security.respectJavaAccessibility", "false")
 from com.wwb.proto import PBMain
 
+
 class ProtoParser(object):
-    """独立的protobuf解析器，用于MCP集成"""
-    
+    """独立的 protobuf 解析器，用于 MCP 集成"""
+
     def __init__(self, dex_unit):
         self.dex_unit = dex_unit
         self.parsed_class = []
-    
+
     def parse_class(self, class_signature):
-        """解析指定类的protobuf定义"""
+        """解析指定类的 protobuf 定义"""
         if not class_signature:
             return None
-        
+
         try:
             # 确保类签名格式正确
             if not class_signature.startswith('L'):
                 class_signature = 'L' + class_signature
             if not class_signature.endswith(';'):
                 class_signature = class_signature + ';'
-            
+
             clazz = self.dex_unit.getClass(class_signature)
             if clazz is None:
                 return {"success": False, "error": "Class not found: %s" % class_signature}
-            
+
             # 重置已解析类列表
             self.parsed_class = []
-            
+
             proto_result = self._parse_cls(clazz)
             return {
                 "success": True,
@@ -54,19 +77,19 @@ class ProtoParser(object):
                 "proto_definition": proto_result,
                 "message": "Protobuf definition parsed successfully"
             }
-            
+
         except Exception as e:
             return {"success": False, "error": "Failed to parse protobuf: %s" % str(e)}
-    
+
     def _parse_cls(self, cls):
         """内部方法：解析类"""
         self.parsed_class.append(cls.getName())
         current_proto = self._parse_proto(cls)
-        
+
         cresultstr = "message " + cls.getName() + " {\n"
         subresult = ""
         for fields in current_proto.split("\n"):
-            if not len(fields) > 0: 
+            if not len(fields) > 0:
                 continue
             if "{" in fields or "}" in fields:
                 cresultstr += "\t" + fields + "\n"
@@ -79,36 +102,36 @@ class ProtoParser(object):
                     if clsField.getName(True) == field[2] or clsField.getName(False) == field[2]:
                         mtype = clsField.getFieldType()
                         cresultstr += "\t" + fields.replace(mfieldType, mtype.getName()) + "\n"
-                        if mtype.getName() in self.parsed_class: 
+                        if mtype.getName() in self.parsed_class:
                             continue
                         subresult += self._parse_cls(mtype.getImplementingClass())
                 continue
-            
+
             if mfieldType == "enum":
                 fields = fields.replace("enum", "int32") + " //unknow enum"
             if "/" in mfieldType:
                 fields = fields.replace(mfieldType, mfieldType.split("/")[1])
             cresultstr += "\t" + fields + "\n"
-            
+
             if not self._is_base_type(mfieldType):
                 if "/" in mfieldType:
-                    if mfieldType.split("/")[1] in self.parsed_class: 
+                    if mfieldType.split("/")[1] in self.parsed_class:
                         continue
-                if mfieldType in self.parsed_class: 
+                if mfieldType in self.parsed_class:
                     continue
                 subresult += self._parse_cls(self.dex_unit.getClass("L" + mfieldType + ";"))
-        
+
         return cresultstr + "}\n\n" + subresult
-    
+
     def _is_base_type(self, mtype):
         """检查是否为基本类型"""
         for basetype in ["enum", "string", "int", "double", "float", "bool", "fixed", "bytes", "oneof", "map", "group"]:
             if basetype in mtype:
                 return True
         return False
-    
+
     def _parse_proto(self, cls):
-        """解析protobuf定义"""
+        """解析 protobuf 定义"""
         if cls is None:
             raise Exception("Class is None")
 
@@ -250,7 +273,6 @@ class ProtoParser(object):
                     continue
                 else:
                     break
-
         if len(messageinfo) < 2:
             raise Exception("Unexpected messageinfo!")
         if len(objs) < 1:
@@ -259,27 +281,27 @@ class ProtoParser(object):
             objs = aputobjs
             objkeys = sorted(aputobjs.keys())
         return PBMain.forJeb(self._to_unicode_escape(messageinfo), ''.join(objs[key] + "," for key in objkeys if key in objs))
-    
+
     def _to_unicode_escape(self, s):
-        """转换为Unicode转义序列"""
+        """转换为 Unicode 转义序列"""
         return ''.join('\\u%04X' % ord(c) if ord(c) <= 0xFFFF else '\\u%08X' % ord(c) for c in s)
 
 
-# 保持原有的JEB脚本接口以向后兼容
+# 保持原有的 JEB 脚本接口以向后兼容
 class protoParser(object):
-    """JEB脚本接口，保持向后兼容"""
-    
+    """JEB 脚本接口，保持向后兼容"""
+
     def run(self, ctx):
         from com.pnfsoftware.jeb.client.api import FormEntry
         prj = ctx.getMainProject()
         dexUnit = prj.findUnit(IDexUnit)
-        
+
         className = ctx.displayForm("proto class", "the class of protobuf",
-                                   FormEntry.Text('className', '', FormEntry.INLINE, None, 0, 0))[0]
-        
+                                    FormEntry.Text('className', '', FormEntry.INLINE, None, 0, 0))[0]
+
         parser = ProtoParser(dexUnit)
         result = parser.parse_class(className)
-        
+
         if result["success"]:
             ctx.displayText("proto", result["proto_definition"], True)
         else:
